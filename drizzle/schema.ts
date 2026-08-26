@@ -199,6 +199,41 @@ export const bloodGroupInventory = mysqlTable(
 );
 
 /**
+ * Patient blood-component reservations tracked from request through fulfilment.
+ * The dashboard is deliberately driven by these persisted status records rather
+ * than by the discovery inventory alone.
+ */
+export const bloodReservations = mysqlTable(
+  "bloodReservations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    referenceCode: varchar("referenceCode", { length: 40 }).notNull(),
+    patientName: varchar("patientName", { length: 160 }).notNull(),
+    patientBloodGroup: mysqlEnum("patientBloodGroup", ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]).notNull(),
+    bloodBankId: int("bloodBankId")
+      .references(() => bloodBanks.id, { onDelete: "restrict" })
+      .notNull(),
+    inventoryId: int("inventoryId")
+      .references(() => bloodGroupInventory.id, { onDelete: "restrict" })
+      .notNull(),
+    requestedUnits: int("requestedUnits").notNull(),
+    status: mysqlEnum("status", ["pending", "accepted", "fulfilled", "cancelled"]).default("pending").notNull(),
+    requestedForAt: timestamp("requestedForAt").notNull(),
+    statusUpdatedAt: timestamp("statusUpdatedAt").defaultNow().notNull(),
+    acceptedAt: timestamp("acceptedAt"),
+    fulfilledAt: timestamp("fulfilledAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("blood_reservations_reference_unique").on(table.referenceCode),
+    index("blood_reservations_status_idx").on(table.status),
+    index("blood_reservations_blood_bank_idx").on(table.bloodBankId),
+    index("blood_reservations_requested_for_idx").on(table.requestedForAt),
+  ],
+);
+
+/**
  * Contact channels for blood banks and medicine sources.
  */
 export const contactDetails = mysqlTable(
@@ -228,4 +263,5 @@ export type MedicineSource = typeof medicineSources.$inferSelect;
 export type MedicineAvailability = typeof medicineAvailability.$inferSelect;
 export type BloodBank = typeof bloodBanks.$inferSelect;
 export type BloodGroupInventory = typeof bloodGroupInventory.$inferSelect;
+export type BloodReservation = typeof bloodReservations.$inferSelect;
 export type ContactDetail = typeof contactDetails.$inferSelect;

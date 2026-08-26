@@ -3,6 +3,7 @@ import {
   getBloodAvailability,
   getBloodComponents,
   getBloodMapMarkers,
+  getBloodReservations,
   getMedicineAvailability,
   getMedicineCategories,
 } from "./db";
@@ -65,6 +66,29 @@ describe("health public discovery API", () => {
     expect(categories.map(category => category.category)).toContain("Critical infusion");
     expect(components.map(component => component.component)).toContain("Packed Red Blood Cells (PRBC)");
   });
+
+  it("returns persisted blood-bank reservations and filters by lifecycle status", async () => {
+    const caller = appRouter.createCaller(createPublicContext());
+    const [allReservations, acceptedReservations] = await Promise.all([
+      caller.health.reservations.list({}),
+      caller.health.reservations.list({ status: "accepted" }),
+    ]);
+
+    expect(allReservations.length).toBeGreaterThanOrEqual(3);
+    expect(allReservations.map(reservation => reservation.status)).toEqual(expect.arrayContaining(["pending", "accepted", "fulfilled"]));
+    expect(acceptedReservations).toHaveLength(1);
+    expect(acceptedReservations[0]).toMatchObject({
+      referenceCode: "LL-RSV-2026-001",
+      bloodBankName: expect.stringContaining("Kolkata Central Blood Bank"),
+      status: "accepted",
+    });
+  });
+
+  it("returns an empty result for a reservation status with no persisted records", async () => {
+    const caller = appRouter.createCaller(createPublicContext());
+
+    await expect(caller.health.reservations.list({ status: "cancelled" })).resolves.toEqual([]);
+  });
 });
 
 describe("health database query helpers", () => {
@@ -94,5 +118,14 @@ describe("health database query helpers", () => {
 
     expect(categories.map(category => category.category)).toContain("Iron chelation");
     expect(components.map(component => component.component)).toContain("Fresh Frozen Plasma (FFP)");
+  });
+
+  it("returns reservation status history with blood-bank context directly", async () => {
+    const reservations = await getBloodReservations();
+
+    expect(reservations).toHaveLength(3);
+    expect(reservations.every(reservation => reservation.patientName === "Srijan")).toBe(true);
+    expect(reservations.every(reservation => reservation.component === "Packed Red Blood Cells (PRBC)")).toBe(true);
+    expect(reservations.every(reservation => reservation.contactPhone)).toBe(true);
   });
 });

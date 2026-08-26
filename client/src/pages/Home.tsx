@@ -11,6 +11,13 @@ import {
   type DemoState,
   type DemoView,
 } from "@/lib/demoFlow";
+import {
+  getReservationViewState,
+  RESERVATION_EMPTY_COPY,
+  RESERVATION_ERROR_TITLE,
+  RESERVATION_RETRY_LABEL,
+  retryReservationQuery,
+} from "@/lib/reservationView";
 import { trpc } from "@/lib/trpc";
 import {
   AlertTriangle,
@@ -41,7 +48,7 @@ import { toast } from "sonner";
 
 const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] as const;
 type BloodGroup = (typeof BLOOD_GROUPS)[number];
-type View = DemoView | "medicines" | "critical";
+type View = DemoView | "medicines" | "critical" | "reservations";
 
 function bloodGroupLabel(group: BloodGroup) {
   if (group === "O-") return "Universal donor";
@@ -82,8 +89,9 @@ function formatUpdated(value: Date | string | null) {
 }
 
 function statusClass(status: string) {
-  if (status === "available" || status === "in_stock") return "border-emerald-400/25 bg-emerald-400/10 text-emerald-200";
-  if (status === "limited" || status === "low_stock" || status === "on_request") return "border-amber-300/25 bg-amber-300/10 text-amber-100";
+  if (status === "available" || status === "in_stock" || status === "fulfilled") return "border-emerald-400/25 bg-emerald-400/10 text-emerald-200";
+  if (status === "accepted") return "border-cyan-300/25 bg-cyan-300/10 text-cyan-100";
+  if (status === "limited" || status === "low_stock" || status === "on_request" || status === "pending") return "border-amber-300/25 bg-amber-300/10 text-amber-100";
   return "border-rose-400/25 bg-rose-400/10 text-rose-100";
 }
 
@@ -104,7 +112,7 @@ function DemoDataNotice() {
   );
 }
 
-function DataState({ loading, error, empty, onRetry, itemName }: { loading: boolean; error?: string; empty: boolean; onRetry: () => void; itemName: string }) {
+function DataState({ loading, error, empty, onRetry, itemName, errorTitle, emptyDescription, retryLabel }: { loading: boolean; error?: string; empty: boolean; onRetry: () => void; itemName: string; errorTitle?: string; emptyDescription?: string; retryLabel?: string }) {
   if (loading) {
     return (
       <div className="flex min-h-44 items-center justify-center rounded-xl border border-slate-700/60 bg-slate-950/30 text-sm text-slate-400">
@@ -116,10 +124,10 @@ function DataState({ loading, error, empty, onRetry, itemName }: { loading: bool
     return (
       <div className="flex min-h-44 flex-col items-center justify-center rounded-xl border border-rose-400/20 bg-rose-500/[0.045] px-6 text-center">
         <AlertTriangle className="mb-2 h-5 w-5 text-rose-300" />
-        <p className="text-sm font-semibold text-rose-100">We could not load {itemName}.</p>
+        <p className="text-sm font-semibold text-rose-100">{errorTitle ?? `We could not load ${itemName}.`}</p>
         <p className="mt-1 max-w-md text-xs text-rose-100/65">{error}</p>
         <Button variant="outline" onClick={onRetry} className="mt-4 border-rose-200/20 bg-transparent text-rose-50 hover:bg-rose-400/10 hover:text-rose-50">
-          <RefreshCw className="mr-2 h-3.5 w-3.5" /> Try again
+          <RefreshCw className="mr-2 h-3.5 w-3.5" /> {retryLabel ?? "Try again"}
         </Button>
       </div>
     );
@@ -129,7 +137,7 @@ function DataState({ loading, error, empty, onRetry, itemName }: { loading: bool
       <div className="flex min-h-44 flex-col items-center justify-center rounded-xl border border-slate-700/60 bg-slate-950/30 px-6 text-center">
         <Search className="mb-2 h-5 w-5 text-slate-500" />
         <p className="text-sm font-semibold text-slate-200">No {itemName} found</p>
-        <p className="mt-1 text-xs text-slate-500">Try a different name, category, blood group, component, or location.</p>
+        <p className="mt-1 text-xs text-slate-500">{emptyDescription ?? "Try a different name, category, blood group, component, or location."}</p>
       </div>
     );
   }
@@ -330,6 +338,38 @@ function MedicineTrackerPage({ criticalOnly = false }: { criticalOnly?: boolean 
   );
 }
 
+const reservationStatusFilters = ["all", "pending", "accepted", "fulfilled", "cancelled"] as const;
+type ReservationStatusFilter = (typeof reservationStatusFilters)[number];
+
+function formatReservationTime(value: Date | string | null) {
+  if (!value) return "Not recorded";
+  return new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+}
+
+function ReservationStatusPage() {
+  const [statusFilter, setStatusFilter] = useState<ReservationStatusFilter>("all");
+  const queryInput = useMemo(() => statusFilter === "all" ? {} : { status: statusFilter }, [statusFilter]);
+  const { data: reservations, isLoading, error, refetch } = trpc.health.reservations.list.useQuery(queryInput);
+  const rows = reservations ?? [];
+  const reservationViewState = getReservationViewState({ isLoading, hasError: Boolean(error), itemCount: rows.length });
+
+  return (
+    <section className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="eyebrow">LifeLink Critical Care</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white sm:text-[28px]">My Blood Reservations</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Track active requests and completed blood-component reservations across participating blood banks.</p></div><div className="rounded-xl border border-cyan-300/20 bg-cyan-300/[.06] px-4 py-3"><p className="text-[10px] font-bold uppercase tracking-[.13em] text-cyan-100/70">Reservation records</p><p className="mt-1 text-xl font-extrabold text-cyan-100">{rows.length}</p></div></div>
+
+      <DemoDataNotice />
+
+      <div className="flex flex-wrap gap-2 rounded-xl border border-slate-700/75 bg-[#101a31] p-3">
+        {reservationStatusFilters.map(status => <Button key={status} variant="outline" onClick={() => setStatusFilter(status)} className={`h-8 border px-3 text-xs font-bold capitalize ${statusFilter === status ? "border-cyan-300/45 bg-cyan-300/10 text-cyan-100 hover:bg-cyan-300/15 hover:text-cyan-50" : "border-slate-600 bg-transparent text-slate-400 hover:bg-slate-700 hover:text-white"}`}>{status === "all" ? "All reservations" : status}</Button>)}
+      </div>
+
+      <DataState loading={reservationViewState === "loading"} error={reservationViewState === "error" ? error?.message : undefined} empty={reservationViewState === "empty"} onRetry={() => void retryReservationQuery(refetch)} itemName="blood reservations" errorTitle={RESERVATION_ERROR_TITLE} emptyDescription={RESERVATION_EMPTY_COPY} retryLabel={RESERVATION_RETRY_LABEL} />
+
+      {reservationViewState === "ready" && <div className="space-y-3">{rows.map(reservation => <article key={reservation.reservationId} className="rounded-xl border border-slate-700/75 bg-[#111b32] p-4 transition-colors hover:border-slate-600"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="text-[15px] font-bold text-slate-100">{reservation.bloodBankName}</h2><StatusPill status={reservation.status} /></div><p className="mt-1 flex items-center gap-1.5 text-xs text-slate-400"><MapPinned className="h-3.5 w-3.5 text-cyan-300/80" /> {reservation.addressLine1}, {reservation.city}, {reservation.state}</p></div><span className="rounded-full border border-slate-600 bg-slate-950/40 px-2.5 py-1 text-[10px] font-bold tracking-[.1em] text-slate-400">{reservation.referenceCode}</span></div><div className="mt-4 grid gap-3 border-t border-slate-700/60 pt-3 sm:grid-cols-2 lg:grid-cols-4"><div><p className="text-[10px] font-bold uppercase tracking-[.13em] text-slate-500">Reserved component</p><p className="mt-1 text-sm font-semibold text-slate-100">{reservation.patientBloodGroup} · {reservation.component}</p></div><div><p className="text-[10px] font-bold uppercase tracking-[.13em] text-slate-500">Requested units</p><p className="mt-1 text-sm font-semibold text-slate-100">{reservation.requestedUnits} unit{reservation.requestedUnits === 1 ? "" : "s"}</p></div><div><p className="text-[10px] font-bold uppercase tracking-[.13em] text-slate-500">Required for</p><p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-slate-100"><CalendarDays className="h-3.5 w-3.5 text-slate-500" /> {formatReservationTime(reservation.requestedForAt)}</p></div><div><p className="text-[10px] font-bold uppercase tracking-[.13em] text-slate-500">Latest status</p><p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-slate-100"><Clock3 className="h-3.5 w-3.5 text-slate-500" /> {formatReservationTime(reservation.statusUpdatedAt)}</p></div></div><div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-700/60 bg-slate-950/25 px-3 py-2.5"><p className="text-xs leading-5 text-slate-400">{reservation.status === "pending" ? "Waiting for the blood bank to review this reservation." : reservation.status === "accepted" ? "Accepted by the blood bank; confirm collection requirements directly with the provider." : reservation.status === "fulfilled" ? "Fulfilled — this is the terminal completed reservation status." : "This reservation has been cancelled."}</p>{reservation.contactPhone && <a href={`tel:${reservation.contactPhone.replaceAll(" ", "")}`} className="inline-flex shrink-0 items-center text-xs font-semibold text-cyan-200 hover:text-cyan-100">Call blood bank <ChevronRight className="ml-0.5 h-3.5 w-3.5" /></a>}</div></article>)}</div>}
+    </section>
+  );
+}
+
 function DemoBankOperationsPage({ status, onAccept }: { status: DemoState["reservationStatus"]; onAccept: () => void }) {
   const accepted = status === "accepted";
   return (
@@ -379,7 +419,7 @@ function DashboardPage({ onNavigate }: { onNavigate: (view: View) => void }) {
 const navItems: Array<{ label: string; view?: View; icon: typeof HeartPulse }> = [
   { label: "Home Dashboard", view: "home", icon: HeartPulse },
   { label: "Find Blood & Map", view: "blood", icon: Search },
-  { label: "My Reservations", icon: CalendarDays },
+  { label: "My Reservations", view: "reservations", icon: CalendarDays },
   { label: "Transfusion & Chemo", icon: Stethoscope },
   { label: "Medicine Tracker", view: "medicines", icon: Pill },
   { label: "Albumin & Critical Meds", view: "critical", icon: ShieldCheck },
@@ -407,7 +447,7 @@ export default function Home() {
     setDemo(previous);
     navigate(demoStepView(previous.step));
   };
-  const currentContent = view === "blood" ? <BloodSearchPage /> : view === "medicines" ? <MedicineTrackerPage /> : view === "critical" ? <MedicineTrackerPage criticalOnly /> : view === "demo-bank" ? <DemoBankOperationsPage status={demo?.reservationStatus ?? "pending"} onAccept={advanceDemo} /> : <DashboardPage onNavigate={navigate} />;
+  const currentContent = view === "blood" ? <BloodSearchPage /> : view === "reservations" ? <ReservationStatusPage /> : view === "medicines" ? <MedicineTrackerPage /> : view === "critical" ? <MedicineTrackerPage criticalOnly /> : view === "demo-bank" ? <DemoBankOperationsPage status={demo?.reservationStatus ?? "pending"} onAccept={advanceDemo} /> : <DashboardPage onNavigate={navigate} />;
 
   return (
     <div className="min-h-screen bg-[#080d1a] text-slate-100">

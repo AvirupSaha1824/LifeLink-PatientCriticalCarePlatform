@@ -3,6 +3,7 @@ import {
   getBloodAvailability,
   getBloodComponents,
   getBloodMapMarkers,
+  getBloodReservations,
   getMedicineAvailability,
   getMedicineCategories,
 } from "../db";
@@ -26,6 +27,10 @@ const bloodFilters = z.object({
   status: z.enum(["available", "limited", "unavailable"]).optional(),
 });
 
+const reservationFilters = z.object({
+  status: z.enum(["pending", "accepted", "fulfilled", "cancelled"]).optional(),
+});
+
 export const healthRouter = router({
   medicines: router({
     list: publicProcedure.input(medicineFilters).query(({ input }) => getMedicineAvailability(input)),
@@ -35,5 +40,8 @@ export const healthRouter = router({
     list: publicProcedure.input(bloodFilters).query(({ input }) => getBloodAvailability(input)),
     components: publicProcedure.query(() => getBloodComponents()),
     mapMarkers: publicProcedure.input(bloodFilters).query(({ input }) => getBloodMapMarkers(input)),
+  }),
+  reservations: router({
+    list: publicProcedure.input(reservationFilters).query(({ input }) => getBloodReservations(input)),
   }),
 });

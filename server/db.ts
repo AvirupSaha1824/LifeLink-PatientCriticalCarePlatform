@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/mysql2";
 import {
   bloodBanks,
   bloodGroupInventory,
+  bloodReservations,
   contactDetails,
   InsertUser,
   locations,
@@ -29,6 +30,10 @@ export type BloodSearchFilters = {
   component?: string;
   location?: string;
   status?: "available" | "limited" | "unavailable";
+};
+
+export type ReservationFilters = {
+  status?: "pending" | "accepted" | "fulfilled" | "cancelled";
 };
 
 // Lazily create the Drizzle instance so local tooling can run without a database.
@@ -242,4 +247,42 @@ export async function getBloodMapMarkers(filters: BloodSearchFilters = {}) {
     if (!markers.has(row.bloodBankId)) markers.set(row.bloodBankId, row);
   }
   return Array.from(markers.values());
+}
+
+export async function getBloodReservations(filters: ReservationFilters = {}) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db
+    .select({
+      reservationId: bloodReservations.id,
+      referenceCode: bloodReservations.referenceCode,
+      patientName: bloodReservations.patientName,
+      patientBloodGroup: bloodReservations.patientBloodGroup,
+      requestedUnits: bloodReservations.requestedUnits,
+      status: bloodReservations.status,
+      requestedForAt: bloodReservations.requestedForAt,
+      statusUpdatedAt: bloodReservations.statusUpdatedAt,
+      acceptedAt: bloodReservations.acceptedAt,
+      fulfilledAt: bloodReservations.fulfilledAt,
+      bloodGroup: bloodGroupInventory.bloodGroup,
+      component: bloodGroupInventory.component,
+      bloodBankId: bloodBanks.id,
+      bloodBankName: bloodBanks.name,
+      bloodBankStatus: bloodBanks.operationalStatus,
+      addressLine1: locations.addressLine1,
+      city: locations.city,
+      state: locations.state,
+      contactPhone: contactDetails.value,
+    })
+    .from(bloodReservations)
+    .innerJoin(bloodGroupInventory, eq(bloodReservations.inventoryId, bloodGroupInventory.id))
+    .innerJoin(bloodBanks, eq(bloodReservations.bloodBankId, bloodBanks.id))
+    .innerJoin(locations, eq(bloodBanks.locationId, locations.id))
+    .leftJoin(
+      contactDetails,
+      and(eq(contactDetails.bloodBankId, bloodBanks.id), eq(contactDetails.isPrimary, true)),
+    )
+    .where(filters.status ? eq(bloodReservations.status, filters.status) : undefined)
+    .orderBy(desc(bloodReservations.requestedForAt));
 }

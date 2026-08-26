@@ -41,3 +41,19 @@ The accessible close control was also exercised during an active Step 1 demo and
 After the controller refactor, a fresh Run interactive demo action again opened Step 1 with the visible Restart, Next step, and Close controls, confirming that the UI remains connected to the tested start/restart/close session actions.
 
 The controller-backed Close control was then exercised and the stable, normal patient dashboard remained visible after dismissal.
+
+## My Reservations verification
+
+The former My Reservations placeholder now opens a connected blood-reservation dashboard. It loaded three persisted demonstration reservations from distinct blood banks and displayed the pending, accepted, and fulfilled lifecycle states, blood component, unit count, requested-for time, latest status timestamp, reference code, location, and provider call action. The fulfilled record explicitly identifies **fulfilled** as the terminal completed reservation status.
+
+Selecting the Fulfilled status filter narrowed the dashboard to the single persisted fulfilled reservation and retained its terminal-completion explanation, confirming the typed status filter operates end to end.
+
+Selecting Cancelled returned no matching seeded records and displayed the responsive **No blood reservations found** empty state, confirming the reservation filter’s empty path.
+
+After refining the interface copy, the empty state now gives reservation-specific guidance: users are prompted to choose another status filter to review other blood-bank requests.
+
+For controlled error-state verification, the isolated browser session was configured to reject only the reservation-list request. Switching to the Pending filter displayed the reservation-specific loading state before the simulated request settled.
+
+The settled error state displayed the tailored title **We could not load your blood reservations**, the controlled service message, and a visible **Try again** control. The isolated browser request override was then restored before retry testing.
+
+Selecting **Try again** recovered the live pending-reservation query and rendered the Ballygunge blood-bank reservation, confirming the retry flow end to end.

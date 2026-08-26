@@ -23,3 +23,13 @@
 - [x] Add a visible Restart demo control that resets the guided sequence to step 1.
 - [x] Verify the Restart demo and Close/Exit controls through automated coverage and the browser.
 - [x] Add automated controller-level coverage for the guided demo Restart and Close/Exit actions.
+- [x] Define persistent blood-reservation data with patient, blood-bank, blood component, unit, status, and status-timestamp fields.
+- [x] Create and apply the reservation schema migration and seed representative reservation records across pending, accepted, and fulfilled terminal statuses.
+- [x] Implement a typed public tRPC reservation-list query for the My Reservations dashboard view.
+- [x] Clarify and verify that fulfilled is the terminal completed reservation status shown in the LifeLink experience.
+- [x] Replace the My Reservations placeholder with a responsive reservation status dashboard that preserves the existing LifeLink design.
+- [x] Add automated and browser verification for reservation data, status labels, and empty/error states.
+- [x] Tailor the My Reservations empty-state copy to reservation-status filtering.
+- [x] Add automated coverage for the My Reservations loading/error state model and retry affordance.
+- [x] Verify the reservation-specific empty and error-state messaging in the browser.
+- [x] Add automated retry-controller coverage for recovery from a My Reservations query error.

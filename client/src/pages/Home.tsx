@@ -1,11 +1,23 @@
 import { MapView } from "@/components/Map";
 import { Button } from "@/components/ui/button";
+import {
+  DEMO_STEPS,
+  closeDemoSession,
+  demoStepView,
+  nextDemoState,
+  previousDemoState,
+  restartDemoSession,
+  startDemoSession,
+  type DemoState,
+  type DemoView,
+} from "@/lib/demoFlow";
 import { trpc } from "@/lib/trpc";
 import {
   AlertTriangle,
   Bell,
   Building2,
   CalendarDays,
+  CheckCircle2,
   ChevronRight,
   Clock3,
   Droplets,
@@ -16,18 +28,20 @@ import {
   Navigation,
   PackageCheck,
   Pill,
+  PlayCircle,
   RefreshCw,
   Search,
   ShieldCheck,
   Stethoscope,
   UsersRound,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] as const;
 type BloodGroup = (typeof BLOOD_GROUPS)[number];
-type View = "home" | "blood" | "medicines" | "critical";
+type View = DemoView | "medicines" | "critical";
 
 function bloodGroupLabel(group: BloodGroup) {
   if (group === "O-") return "Universal donor";
@@ -316,6 +330,40 @@ function MedicineTrackerPage({ criticalOnly = false }: { criticalOnly?: boolean 
   );
 }
 
+function DemoBankOperationsPage({ status, onAccept }: { status: DemoState["reservationStatus"]; onAccept: () => void }) {
+  const accepted = status === "accepted";
+  return (
+    <section className="space-y-5">
+      <div><p className="eyebrow">LifeLink demo mode · blood bank operations</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white sm:text-[28px]">Kolkata Central Blood Bank — Reservation Requests</h1></div>
+      <article className="rounded-2xl border border-slate-700/75 bg-[#111b32] p-5 shadow-[0_18px_48px_rgba(0,0,0,.2)]">
+        <div className="flex flex-wrap items-start justify-between gap-4"><div className="flex items-start gap-3"><span className={`grid h-10 w-10 place-items-center rounded-xl ${accepted ? "bg-emerald-400/15 text-emerald-200" : "bg-amber-400/15 text-amber-100"}`}><PackageCheck className="h-5 w-5" /></span><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-base font-bold text-slate-100">Srijan · B+ PRBC reservation</h2><StatusPill status={accepted ? "available" : "limited"} /></div><p className="mt-1 text-xs leading-5 text-slate-400">2 PRBC units · 05 September 2026 · Patient care coordination request</p></div></div><span className="rounded-full border border-slate-600 bg-slate-950/40 px-3 py-1 text-[10px] font-bold uppercase tracking-[.13em] text-slate-400">Demo request</span></div>
+        <div className="mt-5 grid gap-3 border-t border-slate-700/60 pt-4 sm:grid-cols-3"><div><p className="text-[10px] font-bold uppercase tracking-[.13em] text-slate-500">Requested units</p><p className="mt-1 text-lg font-extrabold text-slate-100">2 B+ PRBC</p></div><div><p className="text-[10px] font-bold uppercase tracking-[.13em] text-slate-500">Inventory allocation</p><p className={`mt-1 text-lg font-extrabold ${accepted ? "text-emerald-200" : "text-amber-100"}`}>{accepted ? "Allocated" : "Awaiting review"}</p></div><div><p className="text-[10px] font-bold uppercase tracking-[.13em] text-slate-500">Patient notification</p><p className={`mt-1 text-lg font-extrabold ${accepted ? "text-cyan-200" : "text-slate-300"}`}>{accepted ? "Prepared" : "Pending"}</p></div></div>
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-700/60 bg-slate-950/30 px-4 py-3"><p className="text-xs leading-5 text-slate-400">{accepted ? "The demo allocation is accepted. Advance to deliver the patient and caregiver alert." : "Review the incoming request, then accept it to allocate demonstration inventory."}</p>{!accepted && <Button onClick={onAccept} className="bg-emerald-500 text-white hover:bg-emerald-400"><CheckCircle2 className="mr-2 h-4 w-4" /> Accept reservation</Button>}</div>
+      </article>
+    </section>
+  );
+}
+
+function DemoScenarioNotice({ demo }: { demo: DemoState }) {
+  if (demo.step === 3) return <div className="mb-5 flex items-start gap-3 rounded-xl border border-amber-300/20 bg-amber-300/[.06] px-4 py-3 text-sm text-amber-100"><Clock3 className="mt-0.5 h-4 w-4 shrink-0" /><div><strong className="font-bold">Demo reservation pending.</strong><p className="mt-1 text-xs leading-5 text-amber-100/70">Two B+ PRBC units are held in the guided scenario until the blood bank accepts the request.</p></div></div>;
+  if (demo.step === 5) return <div className="mb-5 flex items-start gap-3 rounded-xl border border-emerald-300/20 bg-emerald-300/[.06] px-4 py-3 text-sm text-emerald-100"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /><div><strong className="font-bold">Demo reservation accepted.</strong><p className="mt-1 text-xs leading-5 text-emerald-100/70">The guided inventory allocation is complete and the patient notification is ready.</p></div></div>;
+  if (demo.step === 6) return <div className="mb-5 flex items-start gap-3 rounded-xl border border-cyan-300/20 bg-cyan-300/[.06] px-4 py-3 text-sm text-cyan-100"><Bell className="mt-0.5 h-4 w-4 shrink-0" /><div><strong className="font-bold">Blood Reservation Accepted.</strong><p className="mt-1 text-xs leading-5 text-cyan-100/70">Srijan and caregiver Anita have been notified in this guided demonstration.</p></div></div>;
+  return null;
+}
+
+function InteractiveDemoPanel({ demo, onBack, onNext, onRestart, onClose }: { demo: DemoState; onBack: () => void; onNext: () => void; onRestart: () => void; onClose: () => void }) {
+  const step = DEMO_STEPS[demo.step];
+  const isLast = demo.step === DEMO_STEPS.length - 1;
+  return (
+    <aside aria-live="polite" className="fixed inset-x-4 bottom-4 z-[60] max-w-md rounded-2xl border border-rose-300/30 bg-[#111b32]/95 p-4 shadow-[0_0_0_1px_rgba(244,63,94,.10),0_20px_55px_rgba(0,0,0,.5)] backdrop-blur sm:left-auto sm:right-5">
+      <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.13em] text-rose-300"><PlayCircle className="h-3.5 w-3.5" /> Guided demo</p><h2 className="mt-1 text-sm font-bold text-slate-100">Step {demo.step + 1}: {step.title}</h2></div><button onClick={onClose} aria-label="Close guided demo" className="grid h-7 w-7 place-items-center rounded-full text-slate-400 transition hover:bg-slate-700 hover:text-white"><X className="h-4 w-4" /></button></div>
+      <div className="mt-3 h-1 overflow-hidden rounded-full bg-slate-700"><div className="h-full rounded-full bg-gradient-to-r from-rose-500 to-cyan-400 transition-all duration-300" style={{ width: `${((demo.step + 1) / DEMO_STEPS.length) * 100}%` }} /></div>
+      <p className="mt-3 text-xs leading-5 text-slate-400">{step.description}</p>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2"><span className="text-[10px] font-bold uppercase tracking-[.13em] text-slate-500">Step {demo.step + 1} of {DEMO_STEPS.length}</span><Button variant="ghost" onClick={onRestart} className="h-7 px-2 text-[10px] font-bold uppercase tracking-[.08em] text-slate-400 hover:bg-slate-700 hover:text-white"><RefreshCw className="mr-1 h-3 w-3" /> Restart</Button></div><div className="flex gap-2"><Button variant="outline" disabled={demo.step === 0} onClick={onBack} className="h-8 border-slate-600 bg-transparent px-3 text-xs text-slate-200 hover:bg-slate-700 hover:text-white">Back</Button><Button onClick={onNext} className="h-8 bg-rose-500 px-3 text-xs font-bold text-white hover:bg-rose-400">{isLast ? "Finish demo" : "Next step"}</Button></div></div>
+    </aside>
+  );
+}
+
 function DashboardPage({ onNavigate }: { onNavigate: (view: View) => void }) {
   const actions = [
     { title: "Find Blood", description: "Live availability across regional blood banks", icon: Droplets, view: "blood" as const, tint: "text-rose-300" },
@@ -341,19 +389,37 @@ const navItems: Array<{ label: string; view?: View; icon: typeof HeartPulse }> =
 export default function Home() {
   const [view, setView] = useState<View>("home");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [demo, setDemo] = useState<DemoState | null>(null);
   const navigate = (nextView: View) => { setView(nextView); setSidebarOpen(false); window.scrollTo({ top: 0, behavior: "smooth" }); };
-  const currentContent = view === "blood" ? <BloodSearchPage /> : view === "medicines" ? <MedicineTrackerPage /> : view === "critical" ? <MedicineTrackerPage criticalOnly /> : <DashboardPage onNavigate={navigate} />;
+  const startDemo = () => { const session = startDemoSession(); setDemo(session.demo); navigate(session.view); };
+  const restartDemo = () => { const session = restartDemoSession(); setDemo(session.demo); navigate(session.view); };
+  const closeDemo = () => { const session = closeDemoSession(); setDemo(session.demo); navigate(session.view); };
+  const advanceDemo = () => {
+    if (!demo) return;
+    const next = nextDemoState(demo);
+    if (!next) { setDemo(null); navigate("home"); return; }
+    setDemo(next);
+    navigate(demoStepView(next.step));
+  };
+  const rewindDemo = () => {
+    if (!demo) return;
+    const previous = previousDemoState(demo);
+    setDemo(previous);
+    navigate(demoStepView(previous.step));
+  };
+  const currentContent = view === "blood" ? <BloodSearchPage /> : view === "medicines" ? <MedicineTrackerPage /> : view === "critical" ? <MedicineTrackerPage criticalOnly /> : view === "demo-bank" ? <DemoBankOperationsPage status={demo?.reservationStatus ?? "pending"} onAccept={advanceDemo} /> : <DashboardPage onNavigate={navigate} />;
 
   return (
     <div className="min-h-screen bg-[#080d1a] text-slate-100">
-      <div className="fixed inset-x-0 top-0 z-50 flex min-h-10 items-center justify-between gap-3 bg-gradient-to-r from-[#6046df] via-[#5c69ed] to-[#00c9cb] px-3 py-1.5 text-[11px] font-bold text-white shadow-lg sm:px-6"><span className="rounded-full bg-white/15 px-2.5 py-1 uppercase tracking-wide">Hackathon pitch</span><span className="hidden flex-1 text-center sm:block">Killer Demo: End-to-End Blood Search → Availability → Directions</span><Button size="sm" onClick={() => navigate("blood")} className="h-7 bg-white text-[11px] font-extrabold text-slate-900 hover:bg-slate-100"><Droplets className="mr-1.5 h-3.5 w-3.5 text-rose-500" /> Run discovery demo</Button></div>
+      <div className="fixed inset-x-0 top-0 z-50 flex min-h-10 items-center justify-between gap-3 bg-gradient-to-r from-[#6046df] via-[#5c69ed] to-[#00c9cb] px-3 py-1.5 text-[11px] font-bold text-white shadow-lg sm:px-6"><span className="rounded-full bg-white/15 px-2.5 py-1 uppercase tracking-wide">Hackathon pitch</span><span className="hidden flex-1 text-center sm:block">Killer Demo: Blood Search → Reservation → Acceptance → Patient Alert</span><Button size="sm" onClick={startDemo} className="h-7 bg-white text-[11px] font-extrabold text-slate-900 hover:bg-slate-100"><PlayCircle className="mr-1.5 h-3.5 w-3.5 text-rose-500" /> Run interactive demo</Button></div>
       <div className="pt-10 lg:grid lg:grid-cols-[188px_minmax(0,1fr)]">
         <aside className={`fixed inset-y-10 left-0 z-40 w-[244px] border-r border-slate-800 bg-[#0d1425] transition-transform lg:sticky lg:top-10 lg:h-[calc(100vh-2.5rem)] lg:w-auto lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
           <div className="flex h-full flex-col"><div className="border-b border-slate-800 px-5 py-5"><div className="flex items-center gap-2"><span className="grid h-8 w-8 place-items-center rounded-lg bg-rose-500 shadow-[0_6px_14px_rgba(244,63,94,.25)]"><HeartPulse className="h-4 w-4 text-white" /></span><div><p className="text-sm font-black tracking-tight text-white">LIFELINK</p><p className="text-[8px] font-bold uppercase tracking-[0.13em] text-slate-500">Right blood · right time</p></div></div><label className="mt-5 block text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500">Active portal role<select defaultValue="patient" className="mt-1.5 h-9 w-full rounded-md border border-slate-600 bg-[#121d34] px-2 text-xs font-semibold text-slate-100 outline-none focus:border-indigo-400"><option value="patient">Patient View (Srijan · B+)</option><option value="blood">Blood Bank Portal</option><option value="caregiver">Caregiver Mode</option><option value="admin">System Administrator</option></select></label></div><nav className="flex-1 overflow-y-auto px-2 py-4"><p className="px-3 pb-2 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-600">Patient care coordination</p>{navItems.map(item => { const active = item.view === view; return <button key={item.label} onClick={() => item.view ? navigate(item.view) : toast.info(`${item.label} remains part of the existing workflow.`)} className={`mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-semibold transition ${active ? "bg-rose-500/15 text-rose-100 shadow-[inset_2px_0_0_rgb(244,63,94)]" : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"}`}><item.icon className={`h-4 w-4 ${active ? "text-rose-300" : "text-slate-500"}`} />{item.label}</button>; })}<p className="mt-6 px-3 pb-2 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-600">Alerts &amp; notifications</p><button onClick={() => toast.info("No new critical care alerts.")} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-semibold text-slate-400 hover:bg-slate-800 hover:text-slate-100"><Bell className="h-4 w-4 text-slate-500" />Notifications</button></nav><div className="border-t border-slate-800 px-4 py-4"><div className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-full bg-indigo-500 text-xs font-bold">S</span><div><p className="text-xs font-bold text-slate-200">Srijan</p><p className="text-[9px] text-slate-500">Patient · Thalassemia Major (B+)</p></div></div></div></div>
         </aside>
         {sidebarOpen && <button aria-label="Close navigation" className="fixed inset-0 z-30 bg-slate-950/70 lg:hidden" onClick={() => setSidebarOpen(false)} />}
-        <main className="min-w-0"><header className="sticky top-10 z-20 flex h-16 items-center justify-between border-b border-slate-800/80 bg-[#0b1120]/95 px-4 backdrop-blur sm:px-6"><div className="flex items-center gap-3"><button onClick={() => setSidebarOpen(true)} className="grid h-9 w-9 place-items-center rounded-md border border-slate-700 text-slate-300 lg:hidden"><span className="block h-0.5 w-4 bg-current shadow-[0_5px_0_currentColor,0_-5px_0_currentColor]" /></button><p className="flex items-center gap-2 text-sm font-bold text-slate-100"><HeartPulse className="h-4 w-4 text-rose-400" /> LifeLink Critical Care</p></div><div className="flex items-center gap-2"><span className="hidden rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-[10px] font-semibold text-slate-400 sm:inline">Secure care coordination</span><button onClick={() => toast.info("No new critical care alerts.")} className="grid h-8 w-8 place-items-center rounded-full text-slate-400 hover:bg-slate-800 hover:text-slate-200"><Bell className="h-4 w-4" /></button></div></header><div className="mx-auto max-w-[1420px] px-4 py-7 sm:px-6 lg:px-7">{currentContent}</div></main>
+        <main className="min-w-0"><header className="sticky top-10 z-20 flex h-16 items-center justify-between border-b border-slate-800/80 bg-[#0b1120]/95 px-4 backdrop-blur sm:px-6"><div className="flex items-center gap-3"><button onClick={() => setSidebarOpen(true)} className="grid h-9 w-9 place-items-center rounded-md border border-slate-700 text-slate-300 lg:hidden"><span className="block h-0.5 w-4 bg-current shadow-[0_5px_0_currentColor,0_-5px_0_currentColor]" /></button><p className="flex items-center gap-2 text-sm font-bold text-slate-100"><HeartPulse className="h-4 w-4 text-rose-400" /> LifeLink Critical Care</p></div><div className="flex items-center gap-2"><span className="hidden rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-[10px] font-semibold text-slate-400 sm:inline">Secure care coordination</span><button onClick={() => toast.info("No new critical care alerts.")} className="grid h-8 w-8 place-items-center rounded-full text-slate-400 hover:bg-slate-800 hover:text-slate-200"><Bell className="h-4 w-4" /></button></div></header><div className="mx-auto max-w-[1420px] px-4 py-7 sm:px-6 lg:px-7">{demo && <DemoScenarioNotice demo={demo} />}{currentContent}</div></main>
       </div>
+      {demo && <InteractiveDemoPanel demo={demo} onBack={rewindDemo} onNext={advanceDemo} onRestart={restartDemo} onClose={closeDemo} />}
     </div>
   );
 }

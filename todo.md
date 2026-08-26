@@ -16,3 +16,10 @@
 - [x] Eliminate the Google Maps script-loading console warning and reverify the map.
 - [x] Fix the asynchronous Google Maps callback regression that left the map container blank.
 - [x] Reload the final blood-bank map and confirm no fresh Maps loader warning is emitted.
+- [x] Inspect the reference interactive-demo behavior and capture the sequence of visible states.
+- [x] Add a guided LifeLink demo mode that progresses through blood search, reservation, blood-bank acceptance, and patient alert states.
+- [x] Provide visible demo controls to start, progress, restart, and exit the sequence without changing the established UI design.
+- [x] Add automated coverage and browser verification for the interactive demo flow.
+- [x] Add a visible Restart demo control that resets the guided sequence to step 1.
+- [x] Verify the Restart demo and Close/Exit controls through automated coverage and the browser.
+- [x] Add automated controller-level coverage for the guided demo Restart and Close/Exit actions.

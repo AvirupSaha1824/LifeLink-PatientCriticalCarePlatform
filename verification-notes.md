@@ -95,3 +95,13 @@ Caregiver Mode now exposes All caregivers, Active, Invited, and Paused status fi
 The relational migration created the representative Srijan patient profile, linked every existing Srijan reservation, hospital treatment status, and caregiver consent record to that canonical profile, and retained the established dashboard content. The automated suite now includes a patient-scoped journey assertion through both the public API and direct data helper; all **36 tests** passed.
 
 In the browser, Caregiver Mode loaded four persisted caregiver links, three shared updates, and three practical coordination suggestions. Its new **Connected care journey** panel visibly displayed **Reservation LL-RSV-2026-001 → Hospital LL-TX-2026-001** and identified that the linked caregiver suggestion belongs to the same representative record. The existing caution that suggestions do not replace clinical advice remains visible in the interface.
+
+## Current time and status dashboard verification
+
+The home dashboard now renders the live India local date and seconds-level clock rather than a fixed date. Browser verification showed **Thursday, 27 August 2026 · 01:32:12 pm** and the greeting correctly changed to **Good afternoon** for that local hour.
+
+The same page rendered current representative record states together: reservation **LL-RSV-2026-001** as accepted, treatment **LL-TX-2026-001** as confirmed, and the caregiver network as two active and two invited contacts. The persisted records remain explicitly representative demonstration data and retain the clinical-decision caution.
+
+The refreshed Reservations view showed the timeline-aligned representative records directly from the database: `LL-RSV-2026-001` remained accepted and required on **29 August 2026**, `LL-RSV-2026-002` remained pending and required on **03 September 2026**, and `LL-RSV-2026-003` remained fulfilled with a completed date of **20 August 2026**. Their latest status timestamps reflected the status update on **27 August 2026** for active records.
+
+The Treatments view rendered the refreshed current timeline: confirmed transfusion `LL-TX-2026-001` on **29 August 2026**, delayed chemotherapy review `LL-TX-2026-004` on the same date, scheduled chemotherapy `LL-TX-2026-002` on **03 September 2026**, and a completed historical transfusion on **19 August 2026**. Caregiver Mode then rendered two active contacts with current activity timestamps and two invited offline contacts, while shared-care update and linked blood-suggestion timestamps reflected the current update time.

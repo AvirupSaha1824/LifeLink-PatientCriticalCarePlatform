@@ -189,6 +189,28 @@ describe("health public discovery API", () => {
       }),
     ]));
   });
+
+  it("returns timeline-aligned representative reservation, treatment, and caregiver statuses", async () => {
+    const caller = appRouter.createCaller(createPublicContext());
+    const [reservations, treatments, caregiverLinks] = await Promise.all([
+      caller.health.reservations.list({}),
+      caller.health.treatments.list({}),
+      caller.health.caregivers.links({ patientName: "Srijan" }),
+    ]);
+    const now = Date.now();
+    const acceptedReservation = reservations.find(record => record.referenceCode === "LL-RSV-2026-001");
+    const scheduledChemotherapy = treatments.find(record => record.referenceCode === "LL-TX-2026-002");
+    const delayedChemotherapy = treatments.find(record => record.referenceCode === "LL-TX-2026-004");
+
+    expect(acceptedReservation).toMatchObject({ status: "accepted" });
+    expect(new Date(acceptedReservation?.requestedForAt ?? 0).getTime()).toBeGreaterThan(now + 24 * 60 * 60 * 1000);
+    expect(scheduledChemotherapy).toMatchObject({ treatmentType: "chemotherapy", status: "scheduled" });
+    expect(new Date(scheduledChemotherapy?.scheduledForAt ?? 0).getTime()).toBeGreaterThan(now + 24 * 60 * 60 * 1000);
+    expect(delayedChemotherapy).toMatchObject({ treatmentType: "chemotherapy", status: "delayed" });
+    expect(caregiverLinks.filter(link => link.linkStatus === "active")).toHaveLength(2);
+    expect(caregiverLinks.filter(link => link.linkStatus === "invited")).toHaveLength(2);
+    expect(caregiverLinks.filter(link => link.linkStatus === "active").every(link => link.lastSharedAt && new Date(link.lastSharedAt).getTime() <= now)).toBe(true);
+  });
 });
 
 describe("health database query helpers", () => {

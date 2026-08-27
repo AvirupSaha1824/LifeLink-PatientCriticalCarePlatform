@@ -32,6 +32,7 @@ import {
   TREATMENT_RETRY_LABEL,
   retryTreatmentQuery,
 } from "@/lib/treatmentView";
+import { describeCaregiverNetwork, formatDashboardNow, greetingForHour, indiaLocalHour, selectCurrentCareTask } from "@/lib/dashboardTimeline";
 import { trpc } from "@/lib/trpc";
 import {
   AlertTriangle,
@@ -518,7 +519,7 @@ function InteractiveDemoPanel({ demo, onBack, onNext, onRestart, onClose }: { de
   );
 }
 
-function DashboardPage({ onNavigate }: { onNavigate: (view: View) => void }) {
+function LegacyDashboardPage({ onNavigate }: { onNavigate: (view: View) => void }) {
   const actions = [
     { title: "Find Blood", description: "Live availability across regional blood banks", icon: Droplets, view: "blood" as const, tint: "text-rose-300" },
     { title: "Medicines", description: "Availability, stock status & source contacts", icon: Pill, view: "medicines" as const, tint: "text-violet-300" },
@@ -527,6 +528,68 @@ function DashboardPage({ onNavigate }: { onNavigate: (view: View) => void }) {
   ];
   return (
     <section className="space-y-5"><div><p className="eyebrow">LifeLink Critical Care</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white sm:text-[28px]">Patient Care Coordination</h1></div><div className="grid gap-4 xl:grid-cols-[1.35fr_0.95fr]"><article className="overflow-hidden rounded-2xl border border-rose-400/25 bg-[#111b32] p-5 shadow-[inset_3px_0_0_rgba(244,63,94,.9),0_18px_48px_rgba(0,0,0,.2)]"><div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-rose-300"><Clock3 className="h-3.5 w-3.5" /> Next care task</div><h2 className="mt-2 text-xl font-extrabold text-white">Blood Transfusion (B+ · 2 Units)</h2><p className="mt-2 flex items-center gap-2 text-sm text-slate-400"><CalendarDays className="h-4 w-4 text-slate-500" /> 05 September 2026 <span className="text-slate-600">•</span> <Hospital className="h-4 w-4 text-slate-500" /> Care team venue</p><div className="mt-5 flex flex-wrap gap-2"><Button onClick={() => onNavigate("blood")} className="bg-rose-500 text-white hover:bg-rose-400"><Droplets className="mr-2 h-4 w-4" /> Arrange blood</Button><Button onClick={() => toast.info("The schedule view remains part of the original workflow.")} variant="outline" className="border-slate-600 bg-transparent text-slate-200 hover:bg-slate-700 hover:text-white"><CalendarDays className="mr-2 h-4 w-4" /> View schedule</Button></div></article><article className="rounded-2xl border border-indigo-400/20 bg-gradient-to-br from-[#151b3f] to-[#121b31] p-5"><div className="inline-flex items-center gap-2 rounded-full bg-indigo-400/15 px-2.5 py-1 text-[10px] font-bold text-indigo-100"><HeartPulse className="h-3.5 w-3.5" /> Daily care status</div><h2 className="mt-3 text-base font-bold text-white">Good evening, Srijan</h2><p className="mt-2 text-sm leading-6 text-slate-400">Your critical-care discovery tools are connected. Search availability before arranging a reservation.</p></article></div><div><p className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Quick actions</p><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{actions.map(action => <button key={action.title} onClick={() => onNavigate(action.view)} className="group rounded-xl border border-slate-700/75 bg-[#111b32] p-4 text-left transition hover:-translate-y-0.5 hover:border-slate-600 hover:bg-[#152039]"><action.icon className={`h-5 w-5 ${action.tint}`} /><h3 className="mt-5 text-sm font-bold text-slate-100">{action.title}</h3><p className="mt-1 text-xs leading-5 text-slate-500">{action.description}</p><ChevronRight className="mt-3 h-4 w-4 text-slate-600 transition group-hover:translate-x-1 group-hover:text-slate-300" /></button>)}</div></div><article className="rounded-xl border border-slate-700/75 bg-[#101a31] px-5 py-4"><p className="flex items-center gap-2 text-sm font-bold text-slate-100"><CalendarDays className="h-4 w-4 text-rose-300" /> Upcoming care schedule</p></article></section>
+  );
+}
+
+function DashboardPage({ onNavigate }: { onNavigate: (view: View) => void }) {
+  const [now, setNow] = useState(() => new Date());
+  const listFilters = useMemo(() => ({}), []);
+  const caregiverFilters = useMemo(() => ({ patientName: "Srijan" }), []);
+  const reservationsQuery = trpc.health.reservations.list.useQuery(listFilters);
+  const treatmentsQuery = trpc.health.treatments.list.useQuery(listFilters);
+  const caregiverLinksQuery = trpc.health.caregivers.links.useQuery(caregiverFilters);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const dateTime = formatDashboardNow(now);
+  const reservations = reservationsQuery.data ?? [];
+  const treatments = treatmentsQuery.data ?? [];
+  const caregiverLinks = caregiverLinksQuery.data ?? [];
+  const currentTask = selectCurrentCareTask(treatments.map(treatment => ({
+    referenceCode: treatment.referenceCode,
+    treatmentType: treatment.treatmentType,
+    treatmentDetail: treatment.treatmentDetail,
+    status: treatment.status,
+    scheduledForAt: treatment.scheduledForAt,
+  })));
+  const currentReservation = reservations.find(reservation => reservation.status === "accepted") ?? reservations.find(reservation => reservation.status === "pending");
+  const caregiverSummary = describeCaregiverNetwork(caregiverLinks.map(link => link.linkStatus));
+  const actions = [
+    { title: "Find Blood", description: "Live availability across regional blood banks", icon: Droplets, view: "blood" as const, tint: "text-rose-300" },
+    { title: "Medicines", description: "Availability, stock status & source contacts", icon: Pill, view: "medicines" as const, tint: "text-violet-300" },
+    { title: "Treatment", description: "Transfusion and chemotherapy milestones", icon: Stethoscope, view: "treatments" as const, tint: "text-cyan-300" },
+    { title: "Caregiver", description: "Sync alerts and reservation updates with family", icon: UsersRound, view: "caregivers" as const, tint: "text-amber-300" },
+  ];
+
+  return (
+    <section className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div><p className="eyebrow">LifeLink Critical Care</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white sm:text-[28px]">Patient Care Coordination</h1></div>
+        <div aria-live="polite" className="rounded-xl border border-slate-700/70 bg-[#101a31] px-3 py-2 text-right"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-slate-500">Current local time</p><p className="mt-0.5 text-xs font-semibold text-cyan-100">{dateTime.date} · {dateTime.time}</p></div>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1.35fr_0.95fr]">
+        <article className="overflow-hidden rounded-2xl border border-rose-400/25 bg-[#111b32] p-5 shadow-[inset_3px_0_0_rgba(244,63,94,.9),0_18px_48px_rgba(0,0,0,.2)]">
+          <div className="flex flex-wrap items-center justify-between gap-2"><p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-rose-300"><Clock3 className="h-3.5 w-3.5" /> Current care task</p>{currentTask && <StatusPill status={currentTask.status} />}</div>
+          <h2 className="mt-2 text-xl font-extrabold text-white">{currentTask ? `${currentTask.treatmentType === "transfusion" ? "Transfusion" : "Chemotherapy"} · ${currentTask.treatmentDetail}` : "Care task status is loading"}</h2>
+          <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-400"><CalendarDays className="h-4 w-4 text-slate-500" /> {currentTask ? new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(currentTask.scheduledForAt)) : dateTime.date}<span className="text-slate-600">•</span><Hospital className="h-4 w-4 text-slate-500" /> Care team venue</p>
+          <div className="mt-5 flex flex-wrap gap-2"><Button onClick={() => onNavigate("blood")} className="bg-rose-500 text-white hover:bg-rose-400"><Droplets className="mr-2 h-4 w-4" /> Arrange blood</Button><Button onClick={() => onNavigate("treatments")} variant="outline" className="border-slate-600 bg-transparent text-slate-200 hover:bg-slate-700 hover:text-white"><CalendarDays className="mr-2 h-4 w-4" /> View schedule</Button></div>
+        </article>
+        <article className="rounded-2xl border border-indigo-400/20 bg-gradient-to-br from-[#151b3f] to-[#121b31] p-5"><div className="inline-flex items-center gap-2 rounded-full bg-indigo-400/15 px-2.5 py-1 text-[10px] font-bold text-indigo-100"><HeartPulse className="h-3.5 w-3.5" /> Daily care status</div><h2 className="mt-3 text-base font-bold text-white">{greetingForHour(indiaLocalHour(now))}, Srijan</h2><p className="mt-2 text-sm leading-6 text-slate-400">Status panels use the latest representative records. Confirm clinical decisions and availability directly with the treating team.</p></article>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <article className="rounded-xl border border-cyan-300/15 bg-[#101a31] p-4"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-slate-500">Blood reservation</p><div className="mt-2 flex items-center justify-between gap-2"><p className="text-sm font-bold text-slate-100">{currentReservation?.referenceCode ?? "Loading record"}</p>{currentReservation && <StatusPill status={currentReservation.status} />}</div><p className="mt-2 text-xs text-slate-500">{currentReservation ? `${currentReservation.requestedUnits} unit${currentReservation.requestedUnits === 1 ? "" : "s"} · ${currentReservation.bloodBankName}` : "Loading current reservation status"}</p></article>
+        <article className="rounded-xl border border-cyan-300/15 bg-[#101a31] p-4"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-slate-500">Treatment status</p><div className="mt-2 flex items-center justify-between gap-2"><p className="text-sm font-bold text-slate-100">{currentTask?.referenceCode ?? "Loading record"}</p>{currentTask && <StatusPill status={currentTask.status} />}</div><p className="mt-2 text-xs text-slate-500">{currentTask ? currentTask.treatmentDetail : "Loading current treatment status"}</p></article>
+        <article className="rounded-xl border border-cyan-300/15 bg-[#101a31] p-4"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-slate-500">Caregiver network</p><div className="mt-2 flex items-center justify-between gap-2"><p className="text-sm font-bold text-slate-100">Trusted contacts</p><StatusPill status={caregiverSummary.active ? "active" : "invited"} /></div><p className="mt-2 text-xs text-slate-500">{caregiverLinksQuery.isLoading ? "Loading caregiver status" : caregiverSummary.label}</p></article>
+      </div>
+
+      <div><p className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Quick actions</p><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{actions.map(action => <button key={action.title} onClick={() => onNavigate(action.view)} className="group rounded-xl border border-slate-700/75 bg-[#111b32] p-4 text-left transition hover:-translate-y-0.5 hover:border-slate-600 hover:bg-[#152039]"><action.icon className={`h-5 w-5 ${action.tint}`} /><h3 className="mt-5 text-sm font-bold text-slate-100">{action.title}</h3><p className="mt-1 text-xs leading-5 text-slate-500">{action.description}</p><ChevronRight className="mt-3 h-4 w-4 text-slate-600 transition group-hover:translate-x-1 group-hover:text-slate-300" /></button>)}</div></div>
+      <article className="rounded-xl border border-slate-700/75 bg-[#101a31] px-5 py-4"><p className="flex items-center gap-2 text-sm font-bold text-slate-100"><CalendarDays className="h-4 w-4 text-rose-300" /> Current care timeline</p><p className="mt-1 text-xs text-slate-500">The dashboard clock updates each second; reservation, treatment, and caregiver statuses refresh from the persisted representative records when the page is loaded.</p></article>
+    </section>
   );
 }
 

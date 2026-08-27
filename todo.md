@@ -57,3 +57,9 @@
 - [x] Update the connected dashboard views to use the linked patient-centered data without redesigning the established LifeLink interface.
 - [x] Write and run automated tests for the full end-to-end relational workflow.
 - [x] Create a Mermaid ER diagram and technical explanation of all LifeLink table connections.
+- [x] Replace fixed home-dashboard date and time copy with a current local date-time display.
+- [x] Align representative reservation, transfusion/chemotherapy, and caregiver status records with the current timeline while retaining clear demo-data labeling.
+- [x] Add automated coverage for current date-time formatting and timeline-aligned status helpers.
+- [x] Verify the refreshed dashboard date, time, and status panels in the browser.
+- [x] Update the representative reservation, treatment, and caregiver database records so their statuses and timestamps match the current timeline, then verify the affected views.
+- [x] Add automated API assertions for the updated representative reservation, treatment, and caregiver statuses and timestamps.

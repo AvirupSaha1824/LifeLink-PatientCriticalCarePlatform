@@ -72,5 +72,5 @@
 - [x] Create a comprehensive README.md documenting LifeLink Blue's features, setup, architecture, data model, verification, and deployment options.
 - [x] Add production data-retention policies and patient-data privacy safeguards to README.md.
 - [x] Validate the completed README policy section and synchronize it to the connected GitHub repository.
-- [ ] Verify the README privacy-policy update is present in the connected GitHub repository.
-- [ ] Confirm whether any additional external service or API key is necessary for the current LifeLink Blue feature set.
+- [x] Verify the README privacy-policy update is present in the connected GitHub repository.
+- [x] Confirm whether any additional external service or API key is necessary for the current LifeLink Blue feature set.

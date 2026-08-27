@@ -57,3 +57,17 @@ For controlled error-state verification, the isolated browser session was config
 The settled error state displayed the tailored title **We could not load your blood reservations**, the controlled service message, and a visible **Try again** control. The isolated browser request override was then restored before retry testing.
 
 Selecting **Try again** recovered the live pending-reservation query and rendered the Ballygunge blood-bank reservation, confirming the retry flow end to end.
+
+## Transfusion & Chemotherapy verification
+
+The former Transfusion & Chemo placeholder now opens a connected hospital treatment dashboard. It rendered four persisted updates across transfusion and chemotherapy care, with scheduled, confirmed, delayed, and completed statuses, hospital details, clinical context, lifecycle timestamps, reference codes, and provider call actions.
+
+Selecting Transfusion narrowed the view to the two persisted transfusion updates. Applying Completed then returned only the completed transfusion record from the Kolkata Thalassemia Centre, confirming that the combined treatment type and lifecycle filters work end to end.
+
+Applying Delayed while Transfusion was selected returned no records and displayed the treatment-specific empty state with guidance to adjust the treatment type or hospital status filters.
+
+For controlled error-state verification, the isolated browser session was configured to reject only hospital treatment-status requests. Switching to Chemotherapy showed the dedicated treatment loading state before the simulated request settled.
+
+The settled treatment error state displayed the tailored title **We could not load hospital treatment updates**, the controlled service message, and a visible **Try again** control. The isolated browser request override was restored before retry testing.
+
+Selecting **Try again** recovered the live chemotherapy query and rendered both persisted chemotherapy updates, confirming the treatment-status retry flow end to end.

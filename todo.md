@@ -33,3 +33,9 @@
 - [x] Add automated coverage for the My Reservations loading/error state model and retry affordance.
 - [x] Verify the reservation-specific empty and error-state messaging in the browser.
 - [x] Add automated retry-controller coverage for recovery from a My Reservations query error.
+- [x] Define persistent hospital treatment-status data for transfusions and chemotherapy, including care venue, schedule, lifecycle status, and status timestamps.
+- [x] Create and apply the treatment-status schema migration and seed representative hospital treatment records.
+- [x] Implement typed public tRPC queries for transfusion and chemotherapy hospital-status records.
+- [x] Replace the Transfusion & Chemo placeholder with a responsive treatment-status dashboard that preserves the current LifeLink design.
+- [x] Add automated and browser verification for treatment data, status filters, and empty/error/retry states.
+- [x] Add automated API coverage for completed and delayed hospital treatment-status filters.

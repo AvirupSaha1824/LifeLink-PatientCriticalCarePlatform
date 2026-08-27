@@ -171,6 +171,70 @@ export const bloodBanks = mysqlTable(
 );
 
 /**
+ * Hospitals that publish verified transfusion and chemotherapy care updates.
+ */
+export const hospitals = mysqlTable(
+  "hospitals",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    name: varchar("name", { length: 180 }).notNull(),
+    department: varchar("department", { length: 140 }).notNull(),
+    locationId: int("locationId")
+      .references(() => locations.id, { onDelete: "restrict" })
+      .notNull(),
+    contactPhone: varchar("contactPhone", { length: 48 }).notNull(),
+    isVerified: boolean("isVerified").default(false).notNull(),
+    operationalStatus: mysqlEnum("operationalStatus", ["open", "limited", "closed"]).default("open").notNull(),
+    lastVerifiedAt: timestamp("lastVerifiedAt").defaultNow().notNull(),
+    statusUpdatedAt: timestamp("statusUpdatedAt").defaultNow().notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("hospitals_name_location_unique").on(table.name, table.locationId),
+    index("hospitals_location_idx").on(table.locationId),
+    index("hospitals_status_idx").on(table.operationalStatus),
+  ],
+);
+
+/**
+ * Current transfusion and chemotherapy milestones published by the care venue.
+ * A row represents the latest status for one hospital treatment appointment.
+ */
+export const hospitalTreatmentStatuses = mysqlTable(
+  "hospitalTreatmentStatuses",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    referenceCode: varchar("referenceCode", { length: 40 }).notNull(),
+    patientName: varchar("patientName", { length: 160 }).notNull(),
+    treatmentType: mysqlEnum("treatmentType", ["transfusion", "chemotherapy"]).notNull(),
+    hospitalId: int("hospitalId")
+      .references(() => hospitals.id, { onDelete: "restrict" })
+      .notNull(),
+    treatmentDetail: varchar("treatmentDetail", { length: 255 }).notNull(),
+    bloodGroup: varchar("bloodGroup", { length: 8 }),
+    plannedUnits: int("plannedUnits"),
+    careCycle: varchar("careCycle", { length: 100 }),
+    status: mysqlEnum("status", ["scheduled", "confirmed", "in_progress", "completed", "delayed", "cancelled"])
+      .default("scheduled")
+      .notNull(),
+    scheduledForAt: timestamp("scheduledForAt").notNull(),
+    statusUpdatedAt: timestamp("statusUpdatedAt").defaultNow().notNull(),
+    completedAt: timestamp("completedAt"),
+    careNotes: text("careNotes"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("hospital_treatment_reference_unique").on(table.referenceCode),
+    index("hospital_treatment_status_idx").on(table.status),
+    index("hospital_treatment_type_idx").on(table.treatmentType),
+    index("hospital_treatment_hospital_idx").on(table.hospitalId),
+    index("hospital_treatment_scheduled_idx").on(table.scheduledForAt),
+  ],
+);
+
+/**
  * Current blood-component stock for a particular blood bank and blood group.
  */
 export const bloodGroupInventory = mysqlTable(
@@ -262,6 +326,8 @@ export type Medicine = typeof medicines.$inferSelect;
 export type MedicineSource = typeof medicineSources.$inferSelect;
 export type MedicineAvailability = typeof medicineAvailability.$inferSelect;
 export type BloodBank = typeof bloodBanks.$inferSelect;
+export type Hospital = typeof hospitals.$inferSelect;
+export type HospitalTreatmentStatus = typeof hospitalTreatmentStatuses.$inferSelect;
 export type BloodGroupInventory = typeof bloodGroupInventory.$inferSelect;
 export type BloodReservation = typeof bloodReservations.$inferSelect;
 export type ContactDetail = typeof contactDetails.$inferSelect;

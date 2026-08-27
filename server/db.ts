@@ -5,6 +5,8 @@ import {
   bloodGroupInventory,
   bloodReservations,
   contactDetails,
+  hospitals,
+  hospitalTreatmentStatuses,
   InsertUser,
   locations,
   medicineAvailability,
@@ -34,6 +36,11 @@ export type BloodSearchFilters = {
 
 export type ReservationFilters = {
   status?: "pending" | "accepted" | "fulfilled" | "cancelled";
+};
+
+export type TreatmentStatusFilters = {
+  treatmentType?: "transfusion" | "chemotherapy";
+  status?: "scheduled" | "confirmed" | "in_progress" | "completed" | "delayed" | "cancelled";
 };
 
 // Lazily create the Drizzle instance so local tooling can run without a database.
@@ -285,4 +292,44 @@ export async function getBloodReservations(filters: ReservationFilters = {}) {
     )
     .where(filters.status ? eq(bloodReservations.status, filters.status) : undefined)
     .orderBy(desc(bloodReservations.requestedForAt));
+}
+
+export async function getHospitalTreatmentStatuses(filters: TreatmentStatusFilters = {}) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions: SQL<unknown>[] = [];
+  if (filters.treatmentType) conditions.push(eq(hospitalTreatmentStatuses.treatmentType, filters.treatmentType));
+  if (filters.status) conditions.push(eq(hospitalTreatmentStatuses.status, filters.status));
+
+  return db
+    .select({
+      treatmentId: hospitalTreatmentStatuses.id,
+      referenceCode: hospitalTreatmentStatuses.referenceCode,
+      patientName: hospitalTreatmentStatuses.patientName,
+      treatmentType: hospitalTreatmentStatuses.treatmentType,
+      treatmentDetail: hospitalTreatmentStatuses.treatmentDetail,
+      bloodGroup: hospitalTreatmentStatuses.bloodGroup,
+      plannedUnits: hospitalTreatmentStatuses.plannedUnits,
+      careCycle: hospitalTreatmentStatuses.careCycle,
+      status: hospitalTreatmentStatuses.status,
+      scheduledForAt: hospitalTreatmentStatuses.scheduledForAt,
+      statusUpdatedAt: hospitalTreatmentStatuses.statusUpdatedAt,
+      completedAt: hospitalTreatmentStatuses.completedAt,
+      careNotes: hospitalTreatmentStatuses.careNotes,
+      hospitalId: hospitals.id,
+      hospitalName: hospitals.name,
+      department: hospitals.department,
+      hospitalPhone: hospitals.contactPhone,
+      hospitalStatus: hospitals.operationalStatus,
+      hospitalVerified: hospitals.isVerified,
+      addressLine1: locations.addressLine1,
+      city: locations.city,
+      state: locations.state,
+    })
+    .from(hospitalTreatmentStatuses)
+    .innerJoin(hospitals, eq(hospitalTreatmentStatuses.hospitalId, hospitals.id))
+    .innerJoin(locations, eq(hospitals.locationId, locations.id))
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(hospitalTreatmentStatuses.scheduledForAt);
 }

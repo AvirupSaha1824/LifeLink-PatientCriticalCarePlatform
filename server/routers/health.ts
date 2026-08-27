@@ -4,6 +4,7 @@ import {
   getBloodComponents,
   getBloodMapMarkers,
   getBloodReservations,
+  getHospitalTreatmentStatuses,
   getMedicineAvailability,
   getMedicineCategories,
 } from "../db";
@@ -31,6 +32,11 @@ const reservationFilters = z.object({
   status: z.enum(["pending", "accepted", "fulfilled", "cancelled"]).optional(),
 });
 
+const treatmentStatusFilters = z.object({
+  treatmentType: z.enum(["transfusion", "chemotherapy"]).optional(),
+  status: z.enum(["scheduled", "confirmed", "in_progress", "completed", "delayed", "cancelled"]).optional(),
+});
+
 export const healthRouter = router({
   medicines: router({
     list: publicProcedure.input(medicineFilters).query(({ input }) => getMedicineAvailability(input)),
@@ -43,5 +49,8 @@ export const healthRouter = router({
   }),
   reservations: router({
     list: publicProcedure.input(reservationFilters).query(({ input }) => getBloodReservations(input)),
+  }),
+  treatments: router({
+    list: publicProcedure.input(treatmentStatusFilters).query(({ input }) => getHospitalTreatmentStatuses(input)),
   }),
 });

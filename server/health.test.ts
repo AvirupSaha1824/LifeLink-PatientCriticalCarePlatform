@@ -4,6 +4,7 @@ import {
   getBloodComponents,
   getBloodMapMarkers,
   getBloodReservations,
+  getHospitalTreatmentStatuses,
   getMedicineAvailability,
   getMedicineCategories,
 } from "./db";
@@ -89,6 +90,34 @@ describe("health public discovery API", () => {
 
     await expect(caller.health.reservations.list({ status: "cancelled" })).resolves.toEqual([]);
   });
+
+  it("returns hospital treatment updates for transfusion and chemotherapy with filters", async () => {
+    const caller = appRouter.createCaller(createPublicContext());
+    const [allTreatments, transfusions, chemotherapy] = await Promise.all([
+      caller.health.treatments.list({}),
+      caller.health.treatments.list({ treatmentType: "transfusion" }),
+      caller.health.treatments.list({ treatmentType: "chemotherapy" }),
+    ]);
+
+    expect(allTreatments).toHaveLength(4);
+    expect(transfusions).toHaveLength(2);
+    expect(chemotherapy).toHaveLength(2);
+    expect(transfusions.map(treatment => treatment.status)).toEqual(expect.arrayContaining(["confirmed", "completed"]));
+    expect(chemotherapy.map(treatment => treatment.status)).toEqual(expect.arrayContaining(["scheduled", "delayed"]));
+  });
+
+  it("filters hospital treatment updates by completed and delayed lifecycle status", async () => {
+    const caller = appRouter.createCaller(createPublicContext());
+    const [completed, delayed] = await Promise.all([
+      caller.health.treatments.list({ status: "completed" }),
+      caller.health.treatments.list({ status: "delayed" }),
+    ]);
+
+    expect(completed).toHaveLength(1);
+    expect(completed[0]).toMatchObject({ referenceCode: "LL-TX-2026-003", treatmentType: "transfusion", status: "completed" });
+    expect(delayed).toHaveLength(1);
+    expect(delayed[0]).toMatchObject({ referenceCode: "LL-TX-2026-004", treatmentType: "chemotherapy", status: "delayed" });
+  });
 });
 
 describe("health database query helpers", () => {
@@ -127,5 +156,13 @@ describe("health database query helpers", () => {
     expect(reservations.every(reservation => reservation.patientName === "Srijan")).toBe(true);
     expect(reservations.every(reservation => reservation.component === "Packed Red Blood Cells (PRBC)")).toBe(true);
     expect(reservations.every(reservation => reservation.contactPhone)).toBe(true);
+  });
+
+  it("returns direct hospital treatment statuses with venue context", async () => {
+    const treatments = await getHospitalTreatmentStatuses({ treatmentType: "transfusion" });
+
+    expect(treatments).toHaveLength(2);
+    expect(treatments.every(treatment => treatment.hospitalName.startsWith("Demo —"))).toBe(true);
+    expect(treatments.every(treatment => treatment.department.length > 0 && treatment.hospitalPhone.length > 0)).toBe(true);
   });
 });

@@ -18,6 +18,13 @@ import {
   RESERVATION_RETRY_LABEL,
   retryReservationQuery,
 } from "@/lib/reservationView";
+import {
+  getTreatmentViewState,
+  TREATMENT_EMPTY_COPY,
+  TREATMENT_ERROR_TITLE,
+  TREATMENT_RETRY_LABEL,
+  retryTreatmentQuery,
+} from "@/lib/treatmentView";
 import { trpc } from "@/lib/trpc";
 import {
   AlertTriangle,
@@ -48,7 +55,7 @@ import { toast } from "sonner";
 
 const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] as const;
 type BloodGroup = (typeof BLOOD_GROUPS)[number];
-type View = DemoView | "medicines" | "critical" | "reservations";
+type View = DemoView | "medicines" | "critical" | "reservations" | "treatments";
 
 function bloodGroupLabel(group: BloodGroup) {
   if (group === "O-") return "Universal donor";
@@ -89,9 +96,10 @@ function formatUpdated(value: Date | string | null) {
 }
 
 function statusClass(status: string) {
-  if (status === "available" || status === "in_stock" || status === "fulfilled") return "border-emerald-400/25 bg-emerald-400/10 text-emerald-200";
-  if (status === "accepted") return "border-cyan-300/25 bg-cyan-300/10 text-cyan-100";
-  if (status === "limited" || status === "low_stock" || status === "on_request" || status === "pending") return "border-amber-300/25 bg-amber-300/10 text-amber-100";
+  if (status === "available" || status === "in_stock" || status === "fulfilled" || status === "completed") return "border-emerald-400/25 bg-emerald-400/10 text-emerald-200";
+  if (status === "accepted" || status === "confirmed") return "border-cyan-300/25 bg-cyan-300/10 text-cyan-100";
+  if (status === "in_progress") return "border-violet-300/25 bg-violet-300/10 text-violet-100";
+  if (status === "limited" || status === "low_stock" || status === "on_request" || status === "pending" || status === "scheduled" || status === "delayed") return "border-amber-300/25 bg-amber-300/10 text-amber-100";
   return "border-rose-400/25 bg-rose-400/10 text-rose-100";
 }
 
@@ -370,6 +378,37 @@ function ReservationStatusPage() {
   );
 }
 
+const treatmentTypes = ["all", "transfusion", "chemotherapy"] as const;
+const treatmentStatuses = ["all", "scheduled", "confirmed", "in_progress", "completed", "delayed", "cancelled"] as const;
+type TreatmentTypeFilter = (typeof treatmentTypes)[number];
+type TreatmentStatusFilter = (typeof treatmentStatuses)[number];
+
+function TreatmentStatusPage() {
+  const [treatmentType, setTreatmentType] = useState<TreatmentTypeFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<TreatmentStatusFilter>("all");
+  const treatmentQuery = useMemo(() => ({
+    treatmentType: treatmentType === "all" ? undefined : treatmentType,
+    status: statusFilter === "all" ? undefined : statusFilter,
+  }), [treatmentType, statusFilter]);
+  const { data: treatments, isLoading, error, refetch } = trpc.health.treatments.list.useQuery(treatmentQuery);
+  const rows = treatments ?? [];
+  const treatmentViewState = getTreatmentViewState({ isLoading, hasError: Boolean(error), itemCount: rows.length });
+
+  return (
+    <section className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="eyebrow">LifeLink Critical Care</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white sm:text-[28px]">Transfusion &amp; Chemotherapy Status</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Review hospital-published milestones, scheduled appointments, and the latest treatment status for transfusion and chemotherapy care.</p></div><div className="rounded-xl border border-violet-300/20 bg-violet-300/[.06] px-4 py-3"><p className="text-[10px] font-bold uppercase tracking-[.13em] text-violet-100/70">Hospital updates</p><p className="mt-1 text-xl font-extrabold text-violet-100">{rows.length}</p></div></div>
+
+      <DemoDataNotice />
+
+      <div className="space-y-3 rounded-xl border border-slate-700/75 bg-[#101a31] p-3"><div className="flex flex-wrap gap-2">{treatmentTypes.map(type => <Button key={type} variant="outline" onClick={() => setTreatmentType(type)} className={`h-8 border px-3 text-xs font-bold capitalize ${treatmentType === type ? "border-violet-300/45 bg-violet-300/10 text-violet-100 hover:bg-violet-300/15 hover:text-violet-50" : "border-slate-600 bg-transparent text-slate-400 hover:bg-slate-700 hover:text-white"}`}>{type === "all" ? "All treatments" : type}</Button>)}</div><div className="flex flex-wrap gap-2 border-t border-slate-700/60 pt-3">{treatmentStatuses.map(status => <Button key={status} variant="ghost" onClick={() => setStatusFilter(status)} className={`h-7 px-2.5 text-[10px] font-bold uppercase tracking-[.08em] ${statusFilter === status ? "bg-slate-700 text-slate-100 hover:bg-slate-700" : "text-slate-500 hover:bg-slate-800 hover:text-slate-200"}`}>{status === "all" ? "All statuses" : statusLabel(status)}</Button>)}</div></div>
+
+      <DataState loading={treatmentViewState === "loading"} error={treatmentViewState === "error" ? error?.message : undefined} empty={treatmentViewState === "empty"} onRetry={() => void retryTreatmentQuery(refetch)} itemName="hospital treatment updates" errorTitle={TREATMENT_ERROR_TITLE} emptyDescription={TREATMENT_EMPTY_COPY} retryLabel={TREATMENT_RETRY_LABEL} />
+
+      {treatmentViewState === "ready" && <div className="space-y-3">{rows.map(treatment => { const isTransfusion = treatment.treatmentType === "transfusion"; return <article key={treatment.treatmentId} className="rounded-xl border border-slate-700/75 bg-[#111b32] p-4 transition-colors hover:border-slate-600"><div className="flex flex-wrap items-start justify-between gap-3"><div className="flex min-w-0 items-start gap-3"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${isTransfusion ? "bg-rose-400/10 text-rose-200" : "bg-violet-400/10 text-violet-200"}`}>{isTransfusion ? <Droplets className="h-4 w-4" /> : <Stethoscope className="h-4 w-4" />}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="text-[15px] font-bold text-slate-100">{isTransfusion ? "Transfusion" : "Chemotherapy"} · {treatment.hospitalName}</h2><StatusPill status={treatment.status} /></div><p className="mt-1 text-xs text-slate-400">{treatment.department} <span className="text-slate-600">•</span> {treatment.addressLine1}, {treatment.city}</p></div></div><span className="rounded-full border border-slate-600 bg-slate-950/40 px-2.5 py-1 text-[10px] font-bold tracking-[.1em] text-slate-400">{treatment.referenceCode}</span></div><div className="mt-4 grid gap-3 border-t border-slate-700/60 pt-3 sm:grid-cols-2 lg:grid-cols-4"><div><p className="text-[10px] font-bold uppercase tracking-[.13em] text-slate-500">Treatment detail</p><p className="mt-1 text-sm font-semibold text-slate-100">{treatment.treatmentDetail}{treatment.bloodGroup ? ` · ${treatment.bloodGroup}` : ""}</p></div><div><p className="text-[10px] font-bold uppercase tracking-[.13em] text-slate-500">Cycle / allocation</p><p className="mt-1 text-sm font-semibold text-slate-100">{treatment.careCycle ?? (treatment.plannedUnits ? `${treatment.plannedUnits} unit${treatment.plannedUnits === 1 ? "" : "s"}` : "Care-team review")}</p></div><div><p className="text-[10px] font-bold uppercase tracking-[.13em] text-slate-500">Scheduled for</p><p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-slate-100"><CalendarDays className="h-3.5 w-3.5 text-slate-500" /> {formatReservationTime(treatment.scheduledForAt)}</p></div><div><p className="text-[10px] font-bold uppercase tracking-[.13em] text-slate-500">Hospital update</p><p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-slate-100"><Clock3 className="h-3.5 w-3.5 text-slate-500" /> {formatReservationTime(treatment.statusUpdatedAt)}</p></div></div><div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-700/60 bg-slate-950/25 px-3 py-2.5"><p className="max-w-3xl text-xs leading-5 text-slate-400">{treatment.careNotes ?? "Hospital status has been updated; confirm care instructions directly with the treatment team."}</p><a href={`tel:${treatment.hospitalPhone.replaceAll(" ", "")}`} className="inline-flex shrink-0 items-center text-xs font-semibold text-cyan-200 hover:text-cyan-100">Call hospital <ChevronRight className="ml-0.5 h-3.5 w-3.5" /></a></div></article>; })}</div>}
+    </section>
+  );
+}
+
 function DemoBankOperationsPage({ status, onAccept }: { status: DemoState["reservationStatus"]; onAccept: () => void }) {
   const accepted = status === "accepted";
   return (
@@ -408,7 +447,7 @@ function DashboardPage({ onNavigate }: { onNavigate: (view: View) => void }) {
   const actions = [
     { title: "Find Blood", description: "Live availability across regional blood banks", icon: Droplets, view: "blood" as const, tint: "text-rose-300" },
     { title: "Medicines", description: "Availability, stock status & source contacts", icon: Pill, view: "medicines" as const, tint: "text-violet-300" },
-    { title: "Treatment", description: "Thalassemia 21-day cycles & chemotherapy milestones", icon: Stethoscope, view: "home" as const, tint: "text-cyan-300" },
+    { title: "Treatment", description: "Thalassemia 21-day cycles & chemotherapy milestones", icon: Stethoscope, view: "treatments" as const, tint: "text-cyan-300" },
     { title: "Caregiver", description: "Sync alerts and reservation updates with family", icon: UsersRound, view: "home" as const, tint: "text-amber-300" },
   ];
   return (
@@ -420,7 +459,7 @@ const navItems: Array<{ label: string; view?: View; icon: typeof HeartPulse }> =
   { label: "Home Dashboard", view: "home", icon: HeartPulse },
   { label: "Find Blood & Map", view: "blood", icon: Search },
   { label: "My Reservations", view: "reservations", icon: CalendarDays },
-  { label: "Transfusion & Chemo", icon: Stethoscope },
+  { label: "Transfusion & Chemo", view: "treatments", icon: Stethoscope },
   { label: "Medicine Tracker", view: "medicines", icon: Pill },
   { label: "Albumin & Critical Meds", view: "critical", icon: ShieldCheck },
   { label: "Caregiver Mode", icon: UsersRound },
@@ -447,7 +486,7 @@ export default function Home() {
     setDemo(previous);
     navigate(demoStepView(previous.step));
   };
-  const currentContent = view === "blood" ? <BloodSearchPage /> : view === "reservations" ? <ReservationStatusPage /> : view === "medicines" ? <MedicineTrackerPage /> : view === "critical" ? <MedicineTrackerPage criticalOnly /> : view === "demo-bank" ? <DemoBankOperationsPage status={demo?.reservationStatus ?? "pending"} onAccept={advanceDemo} /> : <DashboardPage onNavigate={navigate} />;
+  const currentContent = view === "blood" ? <BloodSearchPage /> : view === "reservations" ? <ReservationStatusPage /> : view === "treatments" ? <TreatmentStatusPage /> : view === "medicines" ? <MedicineTrackerPage /> : view === "critical" ? <MedicineTrackerPage criticalOnly /> : view === "demo-bank" ? <DemoBankOperationsPage status={demo?.reservationStatus ?? "pending"} onAccept={advanceDemo} /> : <DashboardPage onNavigate={navigate} />;
 
   return (
     <div className="min-h-screen bg-[#080d1a] text-slate-100">

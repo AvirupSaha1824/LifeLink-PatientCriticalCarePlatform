@@ -50,3 +50,10 @@
 - [x] Verify caregiver-network error recovery and caregiver-specific empty messaging in the browser.
 - [x] Force and verify the Caregiver Mode empty state and its tailored caregiver-specific message in the browser.
 - [x] Add a Caregiver Mode link-status filter with automated coverage for matching and empty results.
+- [x] Define a patient-centered relational model that connects authenticated users, patient profiles, blood reservations, hospital treatment statuses, caregiver links, shared updates, and caregiver suggestions.
+- [x] Add and apply an end-to-end schema migration with explicit foreign keys for patient records, reservation-linked treatment statuses, and reservation-linked caregiver updates and suggestions.
+- [x] Seed a complete representative workflow from an authenticated patient profile through blood reservation, hospital status, caregiver update, and caregiver suggestion.
+- [x] Add typed data access and public API coverage for the complete reservation-to-caregiver-suggestion workflow.
+- [x] Update the connected dashboard views to use the linked patient-centered data without redesigning the established LifeLink interface.
+- [x] Write and run automated tests for the full end-to-end relational workflow.
+- [x] Create a Mermaid ER diagram and technical explanation of all LifeLink table connections.

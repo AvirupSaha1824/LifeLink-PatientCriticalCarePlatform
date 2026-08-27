@@ -198,6 +198,32 @@ export const hospitals = mysqlTable(
 );
 
 /**
+ * Patient care profiles provide the relational anchor for reservations,
+ * hospital treatment updates, and caregiver sharing permissions.
+ */
+export const patientProfiles = mysqlTable(
+  "patientProfiles",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    primaryHospitalId: int("primaryHospitalId").references(() => hospitals.id, { onDelete: "set null" }),
+    medicalRecordNumber: varchar("medicalRecordNumber", { length: 64 }).notNull(),
+    displayName: varchar("displayName", { length: 160 }).notNull(),
+    bloodGroup: mysqlEnum("bloodGroup", ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]).notNull(),
+    careStatus: mysqlEnum("careStatus", ["active", "paused", "archived"]).default("active").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("patient_profiles_user_unique").on(table.userId),
+    uniqueIndex("patient_profiles_record_unique").on(table.medicalRecordNumber),
+    index("patient_profiles_hospital_idx").on(table.primaryHospitalId),
+  ],
+);
+
+/**
  * Current transfusion and chemotherapy milestones published by the care venue.
  * A row represents the latest status for one hospital treatment appointment.
  */
@@ -206,11 +232,15 @@ export const hospitalTreatmentStatuses = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     referenceCode: varchar("referenceCode", { length: 40 }).notNull(),
+    patientId: int("patientId")
+      .references(() => patientProfiles.id, { onDelete: "restrict" })
+      .notNull(),
     patientName: varchar("patientName", { length: 160 }).notNull(),
     treatmentType: mysqlEnum("treatmentType", ["transfusion", "chemotherapy"]).notNull(),
     hospitalId: int("hospitalId")
       .references(() => hospitals.id, { onDelete: "restrict" })
       .notNull(),
+    reservationId: int("reservationId").references(() => bloodReservations.id, { onDelete: "set null" }),
     treatmentDetail: varchar("treatmentDetail", { length: 255 }).notNull(),
     bloodGroup: varchar("bloodGroup", { length: 8 }),
     plannedUnits: int("plannedUnits"),
@@ -230,6 +260,8 @@ export const hospitalTreatmentStatuses = mysqlTable(
     index("hospital_treatment_status_idx").on(table.status),
     index("hospital_treatment_type_idx").on(table.treatmentType),
     index("hospital_treatment_hospital_idx").on(table.hospitalId),
+    index("hospital_treatment_patient_idx").on(table.patientId),
+    index("hospital_treatment_reservation_idx").on(table.reservationId),
     index("hospital_treatment_scheduled_idx").on(table.scheduledForAt),
   ],
 );
@@ -243,6 +275,7 @@ export const caregiverProfiles = mysqlTable(
   "caregiverProfiles",
   {
     id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").references(() => users.id, { onDelete: "set null" }),
     fullName: varchar("fullName", { length: 160 }).notNull(),
     relationship: varchar("relationship", { length: 100 }).notNull(),
     phone: varchar("phone", { length: 48 }).notNull(),
@@ -258,6 +291,7 @@ export const caregiverProfiles = mysqlTable(
   },
   table => [
     uniqueIndex("caregiver_profiles_phone_unique").on(table.phone),
+    uniqueIndex("caregiver_profiles_user_unique").on(table.userId),
     index("caregiver_profiles_availability_idx").on(table.availability),
   ],
 );
@@ -270,6 +304,9 @@ export const patientCaregiverLinks = mysqlTable(
   "patientCaregiverLinks",
   {
     id: int("id").autoincrement().primaryKey(),
+    patientId: int("patientId")
+      .references(() => patientProfiles.id, { onDelete: "cascade" })
+      .notNull(),
     patientName: varchar("patientName", { length: 160 }).notNull(),
     caregiverId: int("caregiverId")
       .references(() => caregiverProfiles.id, { onDelete: "cascade" })
@@ -286,6 +323,8 @@ export const patientCaregiverLinks = mysqlTable(
   },
   table => [
     uniqueIndex("patient_caregiver_link_unique").on(table.patientName, table.caregiverId),
+    uniqueIndex("patient_caregiver_profile_unique").on(table.patientId, table.caregiverId),
+    index("patient_caregiver_patient_idx").on(table.patientId),
     index("patient_caregiver_status_idx").on(table.linkStatus),
   ],
 );
@@ -300,6 +339,9 @@ export const caregiverSharedUpdates = mysqlTable(
     caregiverLinkId: int("caregiverLinkId")
       .references(() => patientCaregiverLinks.id, { onDelete: "cascade" })
       .notNull(),
+    reservationId: int("reservationId").references(() => bloodReservations.id, { onDelete: "set null" }),
+    treatmentStatusId: int("treatmentStatusId").references(() => hospitalTreatmentStatuses.id, { onDelete: "set null" }),
+    medicineAvailabilityId: int("medicineAvailabilityId").references(() => medicineAvailability.id, { onDelete: "set null" }),
     updateType: mysqlEnum("updateType", ["reservation", "treatment", "medicine", "appointment", "general"])
       .notNull(),
     priority: mysqlEnum("priority", ["routine", "important", "urgent"]).default("routine").notNull(),
@@ -312,6 +354,9 @@ export const caregiverSharedUpdates = mysqlTable(
   },
   table => [
     index("caregiver_updates_link_idx").on(table.caregiverLinkId),
+    index("caregiver_updates_reservation_idx").on(table.reservationId),
+    index("caregiver_updates_treatment_idx").on(table.treatmentStatusId),
+    index("caregiver_updates_medicine_idx").on(table.medicineAvailabilityId),
     index("caregiver_updates_priority_idx").on(table.priority),
     index("caregiver_updates_shared_at_idx").on(table.sharedAt),
   ],
@@ -329,6 +374,8 @@ export const caregiverSuggestions = mysqlTable(
     caregiverLinkId: int("caregiverLinkId")
       .references(() => patientCaregiverLinks.id, { onDelete: "cascade" })
       .notNull(),
+    reservationId: int("reservationId").references(() => bloodReservations.id, { onDelete: "set null" }),
+    treatmentStatusId: int("treatmentStatusId").references(() => hospitalTreatmentStatuses.id, { onDelete: "set null" }),
     category: mysqlEnum("category", ["blood", "treatment", "medicine", "appointment", "wellbeing"])
       .notNull(),
     title: varchar("title", { length: 200 }).notNull(),
@@ -343,6 +390,8 @@ export const caregiverSuggestions = mysqlTable(
   },
   table => [
     index("caregiver_suggestions_link_idx").on(table.caregiverLinkId),
+    index("caregiver_suggestions_reservation_idx").on(table.reservationId),
+    index("caregiver_suggestions_treatment_idx").on(table.treatmentStatusId),
     index("caregiver_suggestions_status_idx").on(table.suggestionStatus),
     index("caregiver_suggestions_category_idx").on(table.category),
   ],
@@ -386,6 +435,9 @@ export const bloodReservations = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     referenceCode: varchar("referenceCode", { length: 40 }).notNull(),
+    patientId: int("patientId")
+      .references(() => patientProfiles.id, { onDelete: "restrict" })
+      .notNull(),
     patientName: varchar("patientName", { length: 160 }).notNull(),
     patientBloodGroup: mysqlEnum("patientBloodGroup", ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]).notNull(),
     bloodBankId: int("bloodBankId")
@@ -406,6 +458,7 @@ export const bloodReservations = mysqlTable(
   table => [
     uniqueIndex("blood_reservations_reference_unique").on(table.referenceCode),
     index("blood_reservations_status_idx").on(table.status),
+    index("blood_reservations_patient_idx").on(table.patientId),
     index("blood_reservations_blood_bank_idx").on(table.bloodBankId),
     index("blood_reservations_requested_for_idx").on(table.requestedForAt),
   ],
@@ -441,6 +494,7 @@ export type MedicineSource = typeof medicineSources.$inferSelect;
 export type MedicineAvailability = typeof medicineAvailability.$inferSelect;
 export type BloodBank = typeof bloodBanks.$inferSelect;
 export type Hospital = typeof hospitals.$inferSelect;
+export type PatientProfile = typeof patientProfiles.$inferSelect;
 export type HospitalTreatmentStatus = typeof hospitalTreatmentStatuses.$inferSelect;
 export type CaregiverProfile = typeof caregiverProfiles.$inferSelect;
 export type PatientCaregiverLink = typeof patientCaregiverLinks.$inferSelect;

@@ -7,6 +7,7 @@ import {
   getCaregiverLinks,
   getCaregiverSharedUpdates,
   getCaregiverSuggestions,
+  getCareJourney,
   getHospitalTreatmentStatuses,
   getMedicineAvailability,
   getMedicineCategories,
@@ -153,6 +154,41 @@ describe("health public discovery API", () => {
     expect(result).toMatchObject({ created: false, linkStatus: "active" });
     expect(result.linkId).toEqual(expect.any(Number));
   });
+
+  it("returns one patient-scoped journey from accepted reservation to caregiver suggestion", async () => {
+    const caller = appRouter.createCaller(createPublicContext());
+    const acceptedReservations = await caller.health.reservations.list({ status: "accepted" });
+    const reservation = acceptedReservations.find(record => record.referenceCode === "LL-RSV-2026-001");
+
+    expect(reservation).toBeDefined();
+    if (!reservation) throw new Error("Expected representative accepted reservation");
+
+    const journey = await caller.health.careJourney.get({ patientId: reservation.patientId });
+    expect(journey?.patient.displayName).toBe("Srijan");
+    expect(journey?.reservations.every(record => record.patientId === reservation.patientId)).toBe(true);
+    expect(journey?.treatments.every(record => record.patientId === reservation.patientId)).toBe(true);
+    expect(journey?.caregiverLinks.every(record => record.patientId === reservation.patientId)).toBe(true);
+    expect(journey?.sharedUpdates.every(record => record.patientId === reservation.patientId)).toBe(true);
+    expect(journey?.suggestions.every(record => record.patientId === reservation.patientId)).toBe(true);
+
+    expect(journey?.treatments).toEqual(expect.arrayContaining([
+      expect.objectContaining({ referenceCode: "LL-TX-2026-001", reservationId: reservation.reservationId }),
+    ]));
+    expect(journey?.sharedUpdates).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        title: "Blood reservation accepted",
+        reservationReferenceCode: "LL-RSV-2026-001",
+        treatmentReferenceCode: "LL-TX-2026-001",
+      }),
+    ]));
+    expect(journey?.suggestions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        title: "Confirm collection requirements",
+        reservationReferenceCode: "LL-RSV-2026-001",
+        treatmentReferenceCode: "LL-TX-2026-001",
+      }),
+    ]));
+  });
 });
 
 describe("health database query helpers", () => {
@@ -212,5 +248,19 @@ describe("health database query helpers", () => {
     expect(updates.every(update => update.patientName === "Srijan")).toBe(true);
     expect(suggestions).toHaveLength(2);
     expect(suggestions.every(suggestion => suggestion.detail.includes("confirm") || suggestion.detail.includes("Use the medicine tracker"))).toBe(true);
+  });
+
+  it("scopes direct workflow helper results to the selected patient profile", async () => {
+    const accepted = await getBloodReservations({ status: "accepted" });
+    const reservation = accepted.find(record => record.referenceCode === "LL-RSV-2026-001");
+    expect(reservation).toBeDefined();
+    if (!reservation) throw new Error("Expected representative accepted reservation");
+
+    const journey = await getCareJourney(reservation.patientId);
+    expect(journey).toBeDefined();
+    expect(journey?.patient.id).toBe(reservation.patientId);
+    expect(journey?.reservations.map(record => record.referenceCode)).toContain("LL-RSV-2026-001");
+    expect(journey?.suggestions.map(record => record.title)).toContain("Confirm collection requirements");
+    await expect(getCareJourney(reservation.patientId + 100000)).resolves.toBeUndefined();
   });
 });

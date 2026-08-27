@@ -89,3 +89,9 @@ The controlled request failure displayed the tailored **We could not load the ca
 Selecting **Try again** recovered the live caregiver network and returned the linked caregiver cards, shared updates, and care-coordination suggestions, confirming the error-recovery flow end to end.
 
 Caregiver Mode now exposes All caregivers, Active, Invited, and Paused status filters. Selecting Paused returned no records and displayed the tailored empty-state guidance: **Invite a trusted caregiver to begin sharing practical care updates.**
+
+## Patient-centered workflow verification
+
+The relational migration created the representative Srijan patient profile, linked every existing Srijan reservation, hospital treatment status, and caregiver consent record to that canonical profile, and retained the established dashboard content. The automated suite now includes a patient-scoped journey assertion through both the public API and direct data helper; all **36 tests** passed.
+
+In the browser, Caregiver Mode loaded four persisted caregiver links, three shared updates, and three practical coordination suggestions. Its new **Connected care journey** panel visibly displayed **Reservation LL-RSV-2026-001 → Hospital LL-TX-2026-001** and identified that the linked caregiver suggestion belongs to the same representative record. The existing caution that suggestions do not replace clinical advice remains visible in the interface.

@@ -420,6 +420,20 @@ function initials(name: string) {
   return name.replace("Demo — ", "").split(" ").map(part => part[0]).join("").slice(0, 2).toUpperCase();
 }
 
+function CareJourneyTrace({
+  updates,
+  suggestions,
+}: {
+  updates: Array<{ updateId: number; reservationReferenceCode: string | null; treatmentReferenceCode: string | null }>;
+  suggestions: Array<{ suggestionId: number; reservationReferenceCode: string | null; treatmentReferenceCode: string | null }>;
+}) {
+  const sharedJourneyUpdate = updates.find(update => update.reservationReferenceCode && update.treatmentReferenceCode);
+  const linkedSuggestion = suggestions.find(suggestion => suggestion.reservationReferenceCode && suggestion.treatmentReferenceCode);
+  if (!sharedJourneyUpdate && !linkedSuggestion) return null;
+
+  return <div className="rounded-xl border border-cyan-300/20 bg-cyan-300/[.06] px-4 py-3"><p className="text-[10px] font-bold uppercase tracking-[.13em] text-cyan-200">Connected care journey</p><p className="mt-1 text-xs leading-5 text-slate-300">The representative workflow links the accepted blood reservation to the hospital status and caregiver coordination record.</p><div className="mt-2 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[.08em] text-cyan-100">{sharedJourneyUpdate && <span className="rounded-full border border-cyan-300/20 bg-slate-950/25 px-2.5 py-1">Reservation {sharedJourneyUpdate.reservationReferenceCode} → Hospital {sharedJourneyUpdate.treatmentReferenceCode}</span>}{linkedSuggestion && <span className="rounded-full border border-violet-300/20 bg-violet-300/10 px-2.5 py-1 text-violet-100">Suggestion linked to the same care record</span>}</div></div>;
+}
+
 function CaregiverModePage() {
   const patientName = "Srijan";
   const [showInvite, setShowInvite] = useState(false);
@@ -456,6 +470,8 @@ function CaregiverModePage() {
       <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="eyebrow">LifeLink Critical Care</p><h1 className="mt-1 flex items-center gap-2 text-2xl font-extrabold tracking-tight text-white sm:text-[28px]"><UsersRound className="h-6 w-6 text-rose-300" /> Caregiver Mode &amp; Shared Safety Network</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">Linked caregivers receive care-coordination updates for reservations, hospital schedules, and medicine availability so they can help with practical next steps.</p></div><Button onClick={() => setShowInvite(value => !value)} className="bg-rose-500 font-bold text-white hover:bg-rose-400"><UsersRound className="mr-2 h-4 w-4" /> {showInvite ? "Close invite" : "Invite caregiver"}</Button></div>
 
       <DemoDataNotice />
+
+      <CareJourneyTrace updates={updates} suggestions={suggestions} />
 
       {showInvite && <form onSubmit={submitInvite} className="rounded-2xl border border-rose-300/20 bg-[#111b32] p-4 shadow-[0_18px_48px_rgba(0,0,0,.2)] sm:p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-base font-bold text-slate-100">Invite a trusted caregiver</h2><p className="mt-1 text-xs leading-5 text-slate-400">A new invitation is stored with care-updates access. Confirm that you have permission to share the contact’s details.</p></div><span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.1em] text-amber-100">Demo contact flow</span></div><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><label className="field-label">Caregiver name<input required value={inviteForm.fullName} onChange={event => setInviteForm({ ...inviteForm, fullName: event.target.value })} className="dashboard-input" placeholder="Full name" /></label><label className="field-label">Relationship<input required value={inviteForm.relationship} onChange={event => setInviteForm({ ...inviteForm, relationship: event.target.value })} className="dashboard-input" placeholder="Family caregiver" /></label><label className="field-label">Phone number<input required value={inviteForm.phone} onChange={event => setInviteForm({ ...inviteForm, phone: event.target.value })} className="dashboard-input" placeholder="+91 90000 00000" /></label><label className="field-label">Email <span className="normal-case text-slate-500">optional</span><input type="email" value={inviteForm.email} onChange={event => setInviteForm({ ...inviteForm, email: event.target.value })} className="dashboard-input" placeholder="caregiver@example.com" /></label></div><div className="mt-4 flex justify-end"><Button type="submit" disabled={inviteMutation.isPending} className="bg-cyan-400/15 text-cyan-100 hover:bg-cyan-400/25">{inviteMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UsersRound className="mr-2 h-4 w-4" />}{inviteMutation.isPending ? "Sending invitation" : "Create invitation"}</Button></div></form>}
 

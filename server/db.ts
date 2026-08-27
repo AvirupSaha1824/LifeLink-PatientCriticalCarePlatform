@@ -16,6 +16,7 @@ import {
   medicines,
   medicineSources,
   patientCaregiverLinks,
+  patientProfiles,
   users,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
@@ -39,15 +40,18 @@ export type BloodSearchFilters = {
 };
 
 export type ReservationFilters = {
+  patientId?: number;
   status?: "pending" | "accepted" | "fulfilled" | "cancelled";
 };
 
 export type TreatmentStatusFilters = {
+  patientId?: number;
   treatmentType?: "transfusion" | "chemotherapy";
   status?: "scheduled" | "confirmed" | "in_progress" | "completed" | "delayed" | "cancelled";
 };
 
 export type CaregiverNetworkFilters = {
+  patientId?: number;
   patientName?: string;
   linkStatus?: "invited" | "active" | "paused" | "revoked";
   suggestionStatus?: "new" | "acknowledged" | "completed" | "dismissed";
@@ -278,11 +282,16 @@ export async function getBloodReservations(filters: ReservationFilters = {}) {
   const db = await getDb();
   if (!db) return [];
 
+  const conditions: SQL<unknown>[] = [];
+  if (filters.patientId) conditions.push(eq(bloodReservations.patientId, filters.patientId));
+  if (filters.status) conditions.push(eq(bloodReservations.status, filters.status));
+
   return db
     .select({
       reservationId: bloodReservations.id,
       referenceCode: bloodReservations.referenceCode,
-      patientName: bloodReservations.patientName,
+      patientId: patientProfiles.id,
+      patientName: patientProfiles.displayName,
       patientBloodGroup: bloodReservations.patientBloodGroup,
       requestedUnits: bloodReservations.requestedUnits,
       status: bloodReservations.status,
@@ -301,6 +310,7 @@ export async function getBloodReservations(filters: ReservationFilters = {}) {
       contactPhone: contactDetails.value,
     })
     .from(bloodReservations)
+    .innerJoin(patientProfiles, eq(bloodReservations.patientId, patientProfiles.id))
     .innerJoin(bloodGroupInventory, eq(bloodReservations.inventoryId, bloodGroupInventory.id))
     .innerJoin(bloodBanks, eq(bloodReservations.bloodBankId, bloodBanks.id))
     .innerJoin(locations, eq(bloodBanks.locationId, locations.id))
@@ -308,7 +318,7 @@ export async function getBloodReservations(filters: ReservationFilters = {}) {
       contactDetails,
       and(eq(contactDetails.bloodBankId, bloodBanks.id), eq(contactDetails.isPrimary, true)),
     )
-    .where(filters.status ? eq(bloodReservations.status, filters.status) : undefined)
+    .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(bloodReservations.requestedForAt));
 }
 
@@ -317,6 +327,7 @@ export async function getHospitalTreatmentStatuses(filters: TreatmentStatusFilte
   if (!db) return [];
 
   const conditions: SQL<unknown>[] = [];
+  if (filters.patientId) conditions.push(eq(hospitalTreatmentStatuses.patientId, filters.patientId));
   if (filters.treatmentType) conditions.push(eq(hospitalTreatmentStatuses.treatmentType, filters.treatmentType));
   if (filters.status) conditions.push(eq(hospitalTreatmentStatuses.status, filters.status));
 
@@ -324,7 +335,9 @@ export async function getHospitalTreatmentStatuses(filters: TreatmentStatusFilte
     .select({
       treatmentId: hospitalTreatmentStatuses.id,
       referenceCode: hospitalTreatmentStatuses.referenceCode,
-      patientName: hospitalTreatmentStatuses.patientName,
+      patientId: patientProfiles.id,
+      patientName: patientProfiles.displayName,
+      reservationId: hospitalTreatmentStatuses.reservationId,
       treatmentType: hospitalTreatmentStatuses.treatmentType,
       treatmentDetail: hospitalTreatmentStatuses.treatmentDetail,
       bloodGroup: hospitalTreatmentStatuses.bloodGroup,
@@ -346,6 +359,7 @@ export async function getHospitalTreatmentStatuses(filters: TreatmentStatusFilte
       state: locations.state,
     })
     .from(hospitalTreatmentStatuses)
+    .innerJoin(patientProfiles, eq(hospitalTreatmentStatuses.patientId, patientProfiles.id))
     .innerJoin(hospitals, eq(hospitalTreatmentStatuses.hospitalId, hospitals.id))
     .innerJoin(locations, eq(hospitals.locationId, locations.id))
     .where(conditions.length ? and(...conditions) : undefined)
@@ -357,13 +371,15 @@ export async function getCaregiverLinks(filters: CaregiverNetworkFilters = {}) {
   if (!db) return [];
 
   const conditions: SQL<unknown>[] = [];
+  if (filters.patientId) conditions.push(eq(patientCaregiverLinks.patientId, filters.patientId));
   if (filters.patientName?.trim()) conditions.push(eq(patientCaregiverLinks.patientName, filters.patientName.trim()));
   if (filters.linkStatus) conditions.push(eq(patientCaregiverLinks.linkStatus, filters.linkStatus));
 
   return db
     .select({
       linkId: patientCaregiverLinks.id,
-      patientName: patientCaregiverLinks.patientName,
+      patientId: patientProfiles.id,
+      patientName: patientProfiles.displayName,
       linkStatus: patientCaregiverLinks.linkStatus,
       sharingLevel: patientCaregiverLinks.sharingLevel,
       invitedAt: patientCaregiverLinks.invitedAt,
@@ -380,6 +396,7 @@ export async function getCaregiverLinks(filters: CaregiverNetworkFilters = {}) {
       lastActiveAt: caregiverProfiles.lastActiveAt,
     })
     .from(patientCaregiverLinks)
+    .innerJoin(patientProfiles, eq(patientCaregiverLinks.patientId, patientProfiles.id))
     .innerJoin(caregiverProfiles, eq(patientCaregiverLinks.caregiverId, caregiverProfiles.id))
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(patientCaregiverLinks.lastSharedAt), caregiverProfiles.fullName);
@@ -389,10 +406,17 @@ export async function getCaregiverSharedUpdates(filters: CaregiverNetworkFilters
   const db = await getDb();
   if (!db) return [];
 
-  const patientName = filters.patientName?.trim();
+  const conditions: SQL<unknown>[] = [];
+  if (filters.patientId) conditions.push(eq(patientCaregiverLinks.patientId, filters.patientId));
+  if (filters.patientName?.trim()) conditions.push(eq(patientCaregiverLinks.patientName, filters.patientName.trim()));
   return db
     .select({
       updateId: caregiverSharedUpdates.id,
+      reservationId: caregiverSharedUpdates.reservationId,
+      reservationReferenceCode: bloodReservations.referenceCode,
+      treatmentStatusId: caregiverSharedUpdates.treatmentStatusId,
+      treatmentReferenceCode: hospitalTreatmentStatuses.referenceCode,
+      medicineAvailabilityId: caregiverSharedUpdates.medicineAvailabilityId,
       updateType: caregiverSharedUpdates.updateType,
       priority: caregiverSharedUpdates.priority,
       title: caregiverSharedUpdates.title,
@@ -401,12 +425,16 @@ export async function getCaregiverSharedUpdates(filters: CaregiverNetworkFilters
       readAt: caregiverSharedUpdates.readAt,
       caregiverName: caregiverProfiles.fullName,
       caregiverLinkId: patientCaregiverLinks.id,
-      patientName: patientCaregiverLinks.patientName,
+      patientId: patientProfiles.id,
+      patientName: patientProfiles.displayName,
     })
     .from(caregiverSharedUpdates)
     .innerJoin(patientCaregiverLinks, eq(caregiverSharedUpdates.caregiverLinkId, patientCaregiverLinks.id))
+    .innerJoin(patientProfiles, eq(patientCaregiverLinks.patientId, patientProfiles.id))
     .innerJoin(caregiverProfiles, eq(patientCaregiverLinks.caregiverId, caregiverProfiles.id))
-    .where(patientName ? eq(patientCaregiverLinks.patientName, patientName) : undefined)
+    .leftJoin(bloodReservations, eq(caregiverSharedUpdates.reservationId, bloodReservations.id))
+    .leftJoin(hospitalTreatmentStatuses, eq(caregiverSharedUpdates.treatmentStatusId, hospitalTreatmentStatuses.id))
+    .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(caregiverSharedUpdates.sharedAt));
 }
 
@@ -415,12 +443,17 @@ export async function getCaregiverSuggestions(filters: CaregiverNetworkFilters =
   if (!db) return [];
 
   const conditions: SQL<unknown>[] = [];
+  if (filters.patientId) conditions.push(eq(patientCaregiverLinks.patientId, filters.patientId));
   if (filters.patientName?.trim()) conditions.push(eq(patientCaregiverLinks.patientName, filters.patientName.trim()));
   if (filters.suggestionStatus) conditions.push(eq(caregiverSuggestions.suggestionStatus, filters.suggestionStatus));
 
   return db
     .select({
       suggestionId: caregiverSuggestions.id,
+      reservationId: caregiverSuggestions.reservationId,
+      reservationReferenceCode: bloodReservations.referenceCode,
+      treatmentStatusId: caregiverSuggestions.treatmentStatusId,
+      treatmentReferenceCode: hospitalTreatmentStatuses.referenceCode,
       category: caregiverSuggestions.category,
       title: caregiverSuggestions.title,
       detail: caregiverSuggestions.detail,
@@ -429,18 +462,51 @@ export async function getCaregiverSuggestions(filters: CaregiverNetworkFilters =
       statusUpdatedAt: caregiverSuggestions.statusUpdatedAt,
       caregiverName: caregiverProfiles.fullName,
       caregiverLinkId: patientCaregiverLinks.id,
-      patientName: patientCaregiverLinks.patientName,
+      patientId: patientProfiles.id,
+      patientName: patientProfiles.displayName,
     })
     .from(caregiverSuggestions)
     .innerJoin(patientCaregiverLinks, eq(caregiverSuggestions.caregiverLinkId, patientCaregiverLinks.id))
+    .innerJoin(patientProfiles, eq(patientCaregiverLinks.patientId, patientProfiles.id))
     .innerJoin(caregiverProfiles, eq(patientCaregiverLinks.caregiverId, caregiverProfiles.id))
+    .leftJoin(bloodReservations, eq(caregiverSuggestions.reservationId, bloodReservations.id))
+    .leftJoin(hospitalTreatmentStatuses, eq(caregiverSuggestions.treatmentStatusId, hospitalTreatmentStatuses.id))
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(caregiverSuggestions.suggestedAt));
+}
+
+export async function getCareJourney(patientId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const patient = await db.select().from(patientProfiles).where(eq(patientProfiles.id, patientId)).limit(1);
+  if (!patient[0]) return undefined;
+
+  const [reservations, treatments, caregiverLinks, sharedUpdates, suggestions] = await Promise.all([
+    getBloodReservations({ patientId }),
+    getHospitalTreatmentStatuses({ patientId }),
+    getCaregiverLinks({ patientId }),
+    getCaregiverSharedUpdates({ patientId }),
+    getCaregiverSuggestions({ patientId }),
+  ]);
+
+  return { patient: patient[0], reservations, treatments, caregiverLinks, sharedUpdates, suggestions };
+}
+
+async function getPatientProfileByName(patientName: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const records = await db.select().from(patientProfiles).where(eq(patientProfiles.displayName, patientName)).limit(1);
+  return records[0];
 }
 
 export async function inviteCaregiver(input: CaregiverInvitationInput) {
   const db = await getDb();
   if (!db) throw new Error("Database connection is unavailable");
+
+  const patient = await getPatientProfileByName(input.patientName);
+  if (!patient) throw new Error("A patient profile is required before inviting a caregiver");
 
   let caregiver = await db.select().from(caregiverProfiles).where(eq(caregiverProfiles.phone, input.phone)).limit(1);
   if (!caregiver[0]) {
@@ -463,13 +529,14 @@ export async function inviteCaregiver(input: CaregiverInvitationInput) {
   const links = await db
     .select()
     .from(patientCaregiverLinks)
-    .where(and(eq(patientCaregiverLinks.patientName, input.patientName), eq(patientCaregiverLinks.caregiverId, caregiverRecord.id)))
+    .where(and(eq(patientCaregiverLinks.patientId, patient.id), eq(patientCaregiverLinks.caregiverId, caregiverRecord.id)))
     .limit(1);
   if (links[0]) {
     return { linkId: links[0].id, caregiverId: caregiverRecord.id, created: false, linkStatus: links[0].linkStatus };
   }
 
   await db.insert(patientCaregiverLinks).values({
+    patientId: patient.id,
     patientName: input.patientName,
     caregiverId: caregiverRecord.id,
     linkStatus: "invited",
@@ -479,7 +546,7 @@ export async function inviteCaregiver(input: CaregiverInvitationInput) {
   const invitation = await db
     .select()
     .from(patientCaregiverLinks)
-    .where(and(eq(patientCaregiverLinks.patientName, input.patientName), eq(patientCaregiverLinks.caregiverId, caregiverRecord.id)))
+    .where(and(eq(patientCaregiverLinks.patientId, patient.id), eq(patientCaregiverLinks.caregiverId, caregiverRecord.id)))
     .limit(1);
   if (!invitation[0]) throw new Error("Unable to create caregiver invitation");
 

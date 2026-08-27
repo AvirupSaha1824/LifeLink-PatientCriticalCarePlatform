@@ -235,6 +235,120 @@ export const hospitalTreatmentStatuses = mysqlTable(
 );
 
 /**
+ * Trusted care contacts who can receive shared updates and coordinate support
+ * with the patient. Medical diagnoses and prescriptions are intentionally out
+ * of scope for these profiles.
+ */
+export const caregiverProfiles = mysqlTable(
+  "caregiverProfiles",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    fullName: varchar("fullName", { length: 160 }).notNull(),
+    relationship: varchar("relationship", { length: 100 }).notNull(),
+    phone: varchar("phone", { length: 48 }).notNull(),
+    email: varchar("email", { length: 320 }),
+    availability: mysqlEnum("availability", ["available", "busy", "offline"]).default("available").notNull(),
+    notificationPreference: mysqlEnum("notificationPreference", ["all_updates", "critical_only", "daily_summary"])
+      .default("all_updates")
+      .notNull(),
+    isVerified: boolean("isVerified").default(false).notNull(),
+    lastActiveAt: timestamp("lastActiveAt").defaultNow().notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("caregiver_profiles_phone_unique").on(table.phone),
+    index("caregiver_profiles_availability_idx").on(table.availability),
+  ],
+);
+
+/**
+ * Explicit patient-to-caregiver consent links and the sharing state for each
+ * caregiver relationship.
+ */
+export const patientCaregiverLinks = mysqlTable(
+  "patientCaregiverLinks",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    patientName: varchar("patientName", { length: 160 }).notNull(),
+    caregiverId: int("caregiverId")
+      .references(() => caregiverProfiles.id, { onDelete: "cascade" })
+      .notNull(),
+    linkStatus: mysqlEnum("linkStatus", ["invited", "active", "paused", "revoked"]).default("invited").notNull(),
+    sharingLevel: mysqlEnum("sharingLevel", ["care_updates", "care_and_reservations", "full_coordination"])
+      .default("care_updates")
+      .notNull(),
+    invitedAt: timestamp("invitedAt").defaultNow().notNull(),
+    acceptedAt: timestamp("acceptedAt"),
+    lastSharedAt: timestamp("lastSharedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("patient_caregiver_link_unique").on(table.patientName, table.caregiverId),
+    index("patient_caregiver_status_idx").on(table.linkStatus),
+  ],
+);
+
+/**
+ * Patient care activity that has been shared with a linked caregiver.
+ */
+export const caregiverSharedUpdates = mysqlTable(
+  "caregiverSharedUpdates",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    caregiverLinkId: int("caregiverLinkId")
+      .references(() => patientCaregiverLinks.id, { onDelete: "cascade" })
+      .notNull(),
+    updateType: mysqlEnum("updateType", ["reservation", "treatment", "medicine", "appointment", "general"])
+      .notNull(),
+    priority: mysqlEnum("priority", ["routine", "important", "urgent"]).default("routine").notNull(),
+    title: varchar("title", { length: 200 }).notNull(),
+    detail: text("detail").notNull(),
+    sharedAt: timestamp("sharedAt").defaultNow().notNull(),
+    readAt: timestamp("readAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    index("caregiver_updates_link_idx").on(table.caregiverLinkId),
+    index("caregiver_updates_priority_idx").on(table.priority),
+    index("caregiver_updates_shared_at_idx").on(table.sharedAt),
+  ],
+);
+
+/**
+ * Practical care-coordination prompts created by a caregiver. They are not
+ * diagnoses or treatment recommendations and direct clinical decisions back
+ * to the treating team.
+ */
+export const caregiverSuggestions = mysqlTable(
+  "caregiverSuggestions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    caregiverLinkId: int("caregiverLinkId")
+      .references(() => patientCaregiverLinks.id, { onDelete: "cascade" })
+      .notNull(),
+    category: mysqlEnum("category", ["blood", "treatment", "medicine", "appointment", "wellbeing"])
+      .notNull(),
+    title: varchar("title", { length: 200 }).notNull(),
+    detail: text("detail").notNull(),
+    suggestionStatus: mysqlEnum("suggestionStatus", ["new", "acknowledged", "completed", "dismissed"])
+      .default("new")
+      .notNull(),
+    suggestedAt: timestamp("suggestedAt").defaultNow().notNull(),
+    statusUpdatedAt: timestamp("statusUpdatedAt").defaultNow().notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    index("caregiver_suggestions_link_idx").on(table.caregiverLinkId),
+    index("caregiver_suggestions_status_idx").on(table.suggestionStatus),
+    index("caregiver_suggestions_category_idx").on(table.category),
+  ],
+);
+
+/**
  * Current blood-component stock for a particular blood bank and blood group.
  */
 export const bloodGroupInventory = mysqlTable(
@@ -328,6 +442,10 @@ export type MedicineAvailability = typeof medicineAvailability.$inferSelect;
 export type BloodBank = typeof bloodBanks.$inferSelect;
 export type Hospital = typeof hospitals.$inferSelect;
 export type HospitalTreatmentStatus = typeof hospitalTreatmentStatuses.$inferSelect;
+export type CaregiverProfile = typeof caregiverProfiles.$inferSelect;
+export type PatientCaregiverLink = typeof patientCaregiverLinks.$inferSelect;
+export type CaregiverSharedUpdate = typeof caregiverSharedUpdates.$inferSelect;
+export type CaregiverSuggestion = typeof caregiverSuggestions.$inferSelect;
 export type BloodGroupInventory = typeof bloodGroupInventory.$inferSelect;
 export type BloodReservation = typeof bloodReservations.$inferSelect;
 export type ContactDetail = typeof contactDetails.$inferSelect;

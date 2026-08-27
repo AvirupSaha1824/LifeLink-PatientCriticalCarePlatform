@@ -19,6 +19,13 @@ import {
   retryReservationQuery,
 } from "@/lib/reservationView";
 import {
+  CAREGIVER_EMPTY_COPY,
+  CAREGIVER_ERROR_TITLE,
+  CAREGIVER_RETRY_LABEL,
+  getCaregiverViewState,
+  retryCaregiverNetwork,
+} from "@/lib/caregiverView";
+import {
   getTreatmentViewState,
   TREATMENT_EMPTY_COPY,
   TREATMENT_ERROR_TITLE,
@@ -55,7 +62,7 @@ import { toast } from "sonner";
 
 const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] as const;
 type BloodGroup = (typeof BLOOD_GROUPS)[number];
-type View = DemoView | "medicines" | "critical" | "reservations" | "treatments";
+type View = DemoView | "medicines" | "critical" | "reservations" | "treatments" | "caregivers";
 
 function bloodGroupLabel(group: BloodGroup) {
   if (group === "O-") return "Universal donor";
@@ -409,6 +416,58 @@ function TreatmentStatusPage() {
   );
 }
 
+function initials(name: string) {
+  return name.replace("Demo — ", "").split(" ").map(part => part[0]).join("").slice(0, 2).toUpperCase();
+}
+
+function CaregiverModePage() {
+  const patientName = "Srijan";
+  const [showInvite, setShowInvite] = useState(false);
+  const [linkStatusFilter, setLinkStatusFilter] = useState<"all" | "active" | "invited" | "paused">("all");
+  const [inviteForm, setInviteForm] = useState({ fullName: "", relationship: "Family caregiver", phone: "", email: "" });
+  const caregiverQuery = useMemo(() => ({ patientName, linkStatus: linkStatusFilter === "all" ? undefined : linkStatusFilter }), [linkStatusFilter]);
+  const linksQuery = trpc.health.caregivers.links.useQuery(caregiverQuery);
+  const updatesQuery = trpc.health.caregivers.updates.useQuery(caregiverQuery);
+  const suggestionsQuery = trpc.health.caregivers.suggestions.useQuery(caregiverQuery);
+  const utils = trpc.useUtils();
+  const inviteMutation = trpc.health.caregivers.invite.useMutation({
+    onSuccess: result => {
+      void utils.health.caregivers.links.invalidate();
+      setShowInvite(false);
+      setInviteForm({ fullName: "", relationship: "Family caregiver", phone: "", email: "" });
+      toast.success(result.created ? "Caregiver invitation created." : "This caregiver is already linked.");
+    },
+    onError: mutationError => toast.error(mutationError.message),
+  });
+  const links = linksQuery.data ?? [];
+  const updates = updatesQuery.data ?? [];
+  const suggestions = suggestionsQuery.data ?? [];
+  const isLoading = linksQuery.isLoading || updatesQuery.isLoading || suggestionsQuery.isLoading;
+  const queryError = linksQuery.error?.message ?? updatesQuery.error?.message ?? suggestionsQuery.error?.message;
+  const caregiverViewState = getCaregiverViewState({ isLoading, hasError: Boolean(queryError), caregiverCount: links.length });
+  const retry = () => void retryCaregiverNetwork([linksQuery.refetch, updatesQuery.refetch, suggestionsQuery.refetch]);
+  const submitInvite = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    inviteMutation.mutate({ patientName, fullName: inviteForm.fullName, relationship: inviteForm.relationship, phone: inviteForm.phone, email: inviteForm.email || undefined });
+  };
+
+  return (
+    <section className="space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="eyebrow">LifeLink Critical Care</p><h1 className="mt-1 flex items-center gap-2 text-2xl font-extrabold tracking-tight text-white sm:text-[28px]"><UsersRound className="h-6 w-6 text-rose-300" /> Caregiver Mode &amp; Shared Safety Network</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">Linked caregivers receive care-coordination updates for reservations, hospital schedules, and medicine availability so they can help with practical next steps.</p></div><Button onClick={() => setShowInvite(value => !value)} className="bg-rose-500 font-bold text-white hover:bg-rose-400"><UsersRound className="mr-2 h-4 w-4" /> {showInvite ? "Close invite" : "Invite caregiver"}</Button></div>
+
+      <DemoDataNotice />
+
+      {showInvite && <form onSubmit={submitInvite} className="rounded-2xl border border-rose-300/20 bg-[#111b32] p-4 shadow-[0_18px_48px_rgba(0,0,0,.2)] sm:p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-base font-bold text-slate-100">Invite a trusted caregiver</h2><p className="mt-1 text-xs leading-5 text-slate-400">A new invitation is stored with care-updates access. Confirm that you have permission to share the contact’s details.</p></div><span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.1em] text-amber-100">Demo contact flow</span></div><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><label className="field-label">Caregiver name<input required value={inviteForm.fullName} onChange={event => setInviteForm({ ...inviteForm, fullName: event.target.value })} className="dashboard-input" placeholder="Full name" /></label><label className="field-label">Relationship<input required value={inviteForm.relationship} onChange={event => setInviteForm({ ...inviteForm, relationship: event.target.value })} className="dashboard-input" placeholder="Family caregiver" /></label><label className="field-label">Phone number<input required value={inviteForm.phone} onChange={event => setInviteForm({ ...inviteForm, phone: event.target.value })} className="dashboard-input" placeholder="+91 90000 00000" /></label><label className="field-label">Email <span className="normal-case text-slate-500">optional</span><input type="email" value={inviteForm.email} onChange={event => setInviteForm({ ...inviteForm, email: event.target.value })} className="dashboard-input" placeholder="caregiver@example.com" /></label></div><div className="mt-4 flex justify-end"><Button type="submit" disabled={inviteMutation.isPending} className="bg-cyan-400/15 text-cyan-100 hover:bg-cyan-400/25">{inviteMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UsersRound className="mr-2 h-4 w-4" />}{inviteMutation.isPending ? "Sending invitation" : "Create invitation"}</Button></div></form>}
+
+      <div className="flex flex-wrap gap-2 rounded-xl border border-slate-700/75 bg-[#101a31] p-3">{(["all", "active", "invited", "paused"] as const).map(status => <Button key={status} variant="outline" onClick={() => setLinkStatusFilter(status)} className={`h-8 border px-3 text-xs font-bold capitalize ${linkStatusFilter === status ? "border-cyan-300/45 bg-cyan-300/10 text-cyan-100 hover:bg-cyan-300/15 hover:text-cyan-50" : "border-slate-600 bg-transparent text-slate-400 hover:bg-slate-700 hover:text-white"}`}>{status === "all" ? "All caregivers" : status}</Button>)}</div>
+
+      <DataState loading={caregiverViewState === "loading"} error={caregiverViewState === "error" ? queryError : undefined} empty={caregiverViewState === "empty"} onRetry={retry} itemName="caregiver network records" errorTitle={CAREGIVER_ERROR_TITLE} emptyDescription={CAREGIVER_EMPTY_COPY} retryLabel={CAREGIVER_RETRY_LABEL} />
+
+      {caregiverViewState === "ready" && <><div className="grid gap-4 xl:grid-cols-[1.1fr_.9fr]"><div className="rounded-2xl border border-slate-700/75 bg-[#111b32] p-4 sm:p-5"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-bold text-slate-100">Linked caregivers</p><p className="mt-1 text-xs text-slate-500">Sharing permissions and availability</p></div><span className="rounded-full border border-cyan-300/20 bg-cyan-300/[.08] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.1em] text-cyan-100">{links.filter(link => link.linkStatus === "active").length} active</span></div><div className="mt-4 space-y-3">{links.map(link => <article key={link.linkId} className="rounded-xl border border-slate-700/65 bg-slate-950/20 p-3.5"><div className="flex flex-wrap items-start justify-between gap-3"><div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-indigo-500 to-cyan-400 text-xs font-black text-slate-950">{initials(link.caregiverName)}</span><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-bold text-slate-100">{link.caregiverName}</h2>{link.isVerified && <ShieldCheck className="h-3.5 w-3.5 text-cyan-300" />}</div><p className="mt-0.5 text-xs text-slate-500">{link.relationship} · {statusLabel(link.sharingLevel)}</p></div></div><div className="flex items-center gap-2"><StatusPill status={link.linkStatus} /><StatusPill status={link.availability} /></div></div><div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-700/50 pt-2.5"><p className="text-[11px] text-slate-500">Updates: {statusLabel(link.notificationPreference)}{link.lastSharedAt ? ` · ${formatUpdated(link.lastSharedAt)}` : ""}</p><a href={`tel:${link.caregiverPhone.replaceAll(" ", "")}`} className="text-xs font-semibold text-cyan-200 hover:text-cyan-100">Call caregiver <ChevronRight className="ml-0.5 inline h-3.5 w-3.5" /></a></div></article>)}</div></div><div className="rounded-2xl border border-slate-700/75 bg-[#101a31] p-4 sm:p-5"><p className="text-sm font-bold text-slate-100">Shared care updates</p><p className="mt-1 text-xs text-slate-500">Recent updates visible to linked caregivers</p><div className="mt-4 space-y-3">{updates.map(update => <article key={update.updateId} className="border-l-2 border-cyan-300/50 pl-3"><div className="flex flex-wrap items-center gap-2"><StatusPill status={update.priority} /><p className="text-xs font-bold text-slate-200">{update.title}</p></div><p className="mt-1 text-xs leading-5 text-slate-400">{update.detail}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.08em] text-slate-500">Shared with {update.caregiverName} · {formatUpdated(update.sharedAt)}</p></article>)}</div></div></div><div className="rounded-2xl border border-violet-300/20 bg-gradient-to-br from-[#151b3f] to-[#111b32] p-4 sm:p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-bold text-slate-100">Caregiver coordination suggestions</p><p className="mt-1 max-w-2xl text-xs leading-5 text-slate-400">Practical prompts from caregivers. They do not replace clinical advice; confirm medical decisions with the treating team.</p></div><span className="rounded-full border border-violet-300/20 bg-violet-300/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.1em] text-violet-100">{suggestions.filter(suggestion => suggestion.suggestionStatus === "new").length} new</span></div><div className="mt-4 grid gap-3 lg:grid-cols-3">{suggestions.map(suggestion => <article key={suggestion.suggestionId} className="rounded-xl border border-slate-700/70 bg-slate-950/25 p-3.5"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-violet-200">{suggestion.category}</p><StatusPill status={suggestion.suggestionStatus} /></div><h2 className="mt-3 text-sm font-bold text-slate-100">{suggestion.title}</h2><p className="mt-2 text-xs leading-5 text-slate-400">{suggestion.detail}</p><p className="mt-3 text-[10px] font-semibold uppercase tracking-[.08em] text-slate-500">From {suggestion.caregiverName} · {formatUpdated(suggestion.suggestedAt)}</p></article>)}</div></div></>}
+    </section>
+  );
+}
+
 function DemoBankOperationsPage({ status, onAccept }: { status: DemoState["reservationStatus"]; onAccept: () => void }) {
   const accepted = status === "accepted";
   return (
@@ -448,10 +507,10 @@ function DashboardPage({ onNavigate }: { onNavigate: (view: View) => void }) {
     { title: "Find Blood", description: "Live availability across regional blood banks", icon: Droplets, view: "blood" as const, tint: "text-rose-300" },
     { title: "Medicines", description: "Availability, stock status & source contacts", icon: Pill, view: "medicines" as const, tint: "text-violet-300" },
     { title: "Treatment", description: "Thalassemia 21-day cycles & chemotherapy milestones", icon: Stethoscope, view: "treatments" as const, tint: "text-cyan-300" },
-    { title: "Caregiver", description: "Sync alerts and reservation updates with family", icon: UsersRound, view: "home" as const, tint: "text-amber-300" },
+    { title: "Caregiver", description: "Sync alerts and reservation updates with family", icon: UsersRound, view: "caregivers" as const, tint: "text-amber-300" },
   ];
   return (
-    <section className="space-y-5"><div><p className="eyebrow">LifeLink Critical Care</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white sm:text-[28px]">Patient Care Coordination</h1></div><div className="grid gap-4 xl:grid-cols-[1.35fr_0.95fr]"><article className="overflow-hidden rounded-2xl border border-rose-400/25 bg-[#111b32] p-5 shadow-[inset_3px_0_0_rgba(244,63,94,.9),0_18px_48px_rgba(0,0,0,.2)]"><div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-rose-300"><Clock3 className="h-3.5 w-3.5" /> Next care task</div><h2 className="mt-2 text-xl font-extrabold text-white">Blood Transfusion (B+ · 2 Units)</h2><p className="mt-2 flex items-center gap-2 text-sm text-slate-400"><CalendarDays className="h-4 w-4 text-slate-500" /> 05 September 2026 <span className="text-slate-600">•</span> <Hospital className="h-4 w-4 text-slate-500" /> Care team venue</p><div className="mt-5 flex flex-wrap gap-2"><Button onClick={() => onNavigate("blood")} className="bg-rose-500 text-white hover:bg-rose-400"><Droplets className="mr-2 h-4 w-4" /> Arrange blood</Button><Button onClick={() => toast.info("The schedule view remains part of the original workflow.")} variant="outline" className="border-slate-600 bg-transparent text-slate-200 hover:bg-slate-700 hover:text-white"><CalendarDays className="mr-2 h-4 w-4" /> View schedule</Button></div></article><article className="rounded-2xl border border-indigo-400/20 bg-gradient-to-br from-[#151b3f] to-[#121b31] p-5"><div className="inline-flex items-center gap-2 rounded-full bg-indigo-400/15 px-2.5 py-1 text-[10px] font-bold text-indigo-100"><HeartPulse className="h-3.5 w-3.5" /> Daily care status</div><h2 className="mt-3 text-base font-bold text-white">Good evening, Srijan</h2><p className="mt-2 text-sm leading-6 text-slate-400">Your critical-care discovery tools are connected. Search availability before arranging a reservation.</p></article></div><div><p className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Quick actions</p><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{actions.map(action => <button key={action.title} onClick={() => action.view === "home" ? toast.info(`${action.title} remains in the existing workflow.`) : onNavigate(action.view)} className="group rounded-xl border border-slate-700/75 bg-[#111b32] p-4 text-left transition hover:-translate-y-0.5 hover:border-slate-600 hover:bg-[#152039]"><action.icon className={`h-5 w-5 ${action.tint}`} /><h3 className="mt-5 text-sm font-bold text-slate-100">{action.title}</h3><p className="mt-1 text-xs leading-5 text-slate-500">{action.description}</p><ChevronRight className="mt-3 h-4 w-4 text-slate-600 transition group-hover:translate-x-1 group-hover:text-slate-300" /></button>)}</div></div><article className="rounded-xl border border-slate-700/75 bg-[#101a31] px-5 py-4"><p className="flex items-center gap-2 text-sm font-bold text-slate-100"><CalendarDays className="h-4 w-4 text-rose-300" /> Upcoming care schedule</p></article></section>
+    <section className="space-y-5"><div><p className="eyebrow">LifeLink Critical Care</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white sm:text-[28px]">Patient Care Coordination</h1></div><div className="grid gap-4 xl:grid-cols-[1.35fr_0.95fr]"><article className="overflow-hidden rounded-2xl border border-rose-400/25 bg-[#111b32] p-5 shadow-[inset_3px_0_0_rgba(244,63,94,.9),0_18px_48px_rgba(0,0,0,.2)]"><div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-rose-300"><Clock3 className="h-3.5 w-3.5" /> Next care task</div><h2 className="mt-2 text-xl font-extrabold text-white">Blood Transfusion (B+ · 2 Units)</h2><p className="mt-2 flex items-center gap-2 text-sm text-slate-400"><CalendarDays className="h-4 w-4 text-slate-500" /> 05 September 2026 <span className="text-slate-600">•</span> <Hospital className="h-4 w-4 text-slate-500" /> Care team venue</p><div className="mt-5 flex flex-wrap gap-2"><Button onClick={() => onNavigate("blood")} className="bg-rose-500 text-white hover:bg-rose-400"><Droplets className="mr-2 h-4 w-4" /> Arrange blood</Button><Button onClick={() => toast.info("The schedule view remains part of the original workflow.")} variant="outline" className="border-slate-600 bg-transparent text-slate-200 hover:bg-slate-700 hover:text-white"><CalendarDays className="mr-2 h-4 w-4" /> View schedule</Button></div></article><article className="rounded-2xl border border-indigo-400/20 bg-gradient-to-br from-[#151b3f] to-[#121b31] p-5"><div className="inline-flex items-center gap-2 rounded-full bg-indigo-400/15 px-2.5 py-1 text-[10px] font-bold text-indigo-100"><HeartPulse className="h-3.5 w-3.5" /> Daily care status</div><h2 className="mt-3 text-base font-bold text-white">Good evening, Srijan</h2><p className="mt-2 text-sm leading-6 text-slate-400">Your critical-care discovery tools are connected. Search availability before arranging a reservation.</p></article></div><div><p className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Quick actions</p><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{actions.map(action => <button key={action.title} onClick={() => onNavigate(action.view)} className="group rounded-xl border border-slate-700/75 bg-[#111b32] p-4 text-left transition hover:-translate-y-0.5 hover:border-slate-600 hover:bg-[#152039]"><action.icon className={`h-5 w-5 ${action.tint}`} /><h3 className="mt-5 text-sm font-bold text-slate-100">{action.title}</h3><p className="mt-1 text-xs leading-5 text-slate-500">{action.description}</p><ChevronRight className="mt-3 h-4 w-4 text-slate-600 transition group-hover:translate-x-1 group-hover:text-slate-300" /></button>)}</div></div><article className="rounded-xl border border-slate-700/75 bg-[#101a31] px-5 py-4"><p className="flex items-center gap-2 text-sm font-bold text-slate-100"><CalendarDays className="h-4 w-4 text-rose-300" /> Upcoming care schedule</p></article></section>
   );
 }
 
@@ -462,7 +521,7 @@ const navItems: Array<{ label: string; view?: View; icon: typeof HeartPulse }> =
   { label: "Transfusion & Chemo", view: "treatments", icon: Stethoscope },
   { label: "Medicine Tracker", view: "medicines", icon: Pill },
   { label: "Albumin & Critical Meds", view: "critical", icon: ShieldCheck },
-  { label: "Caregiver Mode", icon: UsersRound },
+  { label: "Caregiver Mode", view: "caregivers", icon: UsersRound },
 ];
 
 export default function Home() {
@@ -486,7 +545,7 @@ export default function Home() {
     setDemo(previous);
     navigate(demoStepView(previous.step));
   };
-  const currentContent = view === "blood" ? <BloodSearchPage /> : view === "reservations" ? <ReservationStatusPage /> : view === "treatments" ? <TreatmentStatusPage /> : view === "medicines" ? <MedicineTrackerPage /> : view === "critical" ? <MedicineTrackerPage criticalOnly /> : view === "demo-bank" ? <DemoBankOperationsPage status={demo?.reservationStatus ?? "pending"} onAccept={advanceDemo} /> : <DashboardPage onNavigate={navigate} />;
+  const currentContent = view === "blood" ? <BloodSearchPage /> : view === "reservations" ? <ReservationStatusPage /> : view === "treatments" ? <TreatmentStatusPage /> : view === "caregivers" ? <CaregiverModePage /> : view === "medicines" ? <MedicineTrackerPage /> : view === "critical" ? <MedicineTrackerPage criticalOnly /> : view === "demo-bank" ? <DemoBankOperationsPage status={demo?.reservationStatus ?? "pending"} onAccept={advanceDemo} /> : <DashboardPage onNavigate={navigate} />;
 
   return (
     <div className="min-h-screen bg-[#080d1a] text-slate-100">

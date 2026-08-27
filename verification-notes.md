@@ -71,3 +71,21 @@ For controlled error-state verification, the isolated browser session was config
 The settled treatment error state displayed the tailored title **We could not load hospital treatment updates**, the controlled service message, and a visible **Try again** control. The isolated browser request override was restored before retry testing.
 
 Selecting **Try again** recovered the live chemotherapy query and rendered both persisted chemotherapy updates, confirming the treatment-status retry flow end to end.
+
+Caregiver Mode was opened from the LifeLink sidebar and successfully rendered three persisted caregiver profiles, including two active links and one pending invitation. The dashboard also displayed caregiver-specific shared updates and practical care-coordination suggestions with the clinical-decision disclaimer intact.
+
+The Caregiver Mode invitation form opened successfully with fields for caregiver name, relationship, phone number, and optional email. It explains that invitations are stored with care-updates access and asks the user to confirm permission before sharing contact details.
+
+A clearly labeled demonstration invitation was submitted through the Caregiver Mode form. The success confirmation appeared, the form closed, and the new persisted caregiver profile was immediately displayed as an invited offline link in the network.
+
+For controlled Caregiver Mode error-state verification, the isolated browser session was configured to reject only caregiver-network requests. The connected caregiver view remained stable before the controlled refresh request was triggered.
+
+The initial remount preserved the last successful caregiver data while the query cache refreshed, so the controlled failure simulation was refined to handle browser Request objects before exercising the explicit retry state.
+
+After refining the isolated request interceptor, the application was navigated away from Caregiver Mode to force a new caregiver-network mount for the controlled error-state check.
+
+The controlled request failure displayed the tailored **We could not load the caregiver network** message, the temporary service detail, and a visible **Try again** control. Normal browser request handling was restored before retry verification.
+
+Selecting **Try again** recovered the live caregiver network and returned the linked caregiver cards, shared updates, and care-coordination suggestions, confirming the error-recovery flow end to end.
+
+Caregiver Mode now exposes All caregivers, Active, Invited, and Paused status filters. Selecting Paused returned no records and displayed the tailored empty-state guidance: **Invite a trusted caregiver to begin sharing practical care updates.**

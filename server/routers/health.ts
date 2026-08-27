@@ -4,7 +4,11 @@ import {
   getBloodComponents,
   getBloodMapMarkers,
   getBloodReservations,
+  getCaregiverLinks,
+  getCaregiverSharedUpdates,
+  getCaregiverSuggestions,
   getHospitalTreatmentStatuses,
+  inviteCaregiver,
   getMedicineAvailability,
   getMedicineCategories,
 } from "../db";
@@ -37,6 +41,20 @@ const treatmentStatusFilters = z.object({
   status: z.enum(["scheduled", "confirmed", "in_progress", "completed", "delayed", "cancelled"]).optional(),
 });
 
+const caregiverNetworkFilters = z.object({
+  patientName: z.string().trim().max(160).optional(),
+  linkStatus: z.enum(["invited", "active", "paused", "revoked"]).optional(),
+  suggestionStatus: z.enum(["new", "acknowledged", "completed", "dismissed"]).optional(),
+});
+
+const caregiverInvitationInput = z.object({
+  patientName: z.string().trim().min(1).max(160),
+  fullName: z.string().trim().min(2).max(160),
+  relationship: z.string().trim().min(2).max(100),
+  phone: z.string().trim().min(7).max(48),
+  email: z.string().trim().email().max(320).optional(),
+});
+
 export const healthRouter = router({
   medicines: router({
     list: publicProcedure.input(medicineFilters).query(({ input }) => getMedicineAvailability(input)),
@@ -52,5 +70,11 @@ export const healthRouter = router({
   }),
   treatments: router({
     list: publicProcedure.input(treatmentStatusFilters).query(({ input }) => getHospitalTreatmentStatuses(input)),
+  }),
+  caregivers: router({
+    links: publicProcedure.input(caregiverNetworkFilters).query(({ input }) => getCaregiverLinks(input)),
+    updates: publicProcedure.input(caregiverNetworkFilters).query(({ input }) => getCaregiverSharedUpdates(input)),
+    suggestions: publicProcedure.input(caregiverNetworkFilters).query(({ input }) => getCaregiverSuggestions(input)),
+    invite: publicProcedure.input(caregiverInvitationInput).mutation(({ input }) => inviteCaregiver(input)),
   }),
 });

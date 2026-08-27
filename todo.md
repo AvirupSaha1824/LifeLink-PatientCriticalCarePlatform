@@ -39,3 +39,14 @@
 - [x] Replace the Transfusion & Chemo placeholder with a responsive treatment-status dashboard that preserves the current LifeLink design.
 - [x] Add automated and browser verification for treatment data, status filters, and empty/error/retry states.
 - [x] Add automated API coverage for completed and delayed hospital treatment-status filters.
+- [x] Define persistent caregiver profiles, patient-caregiver links, shared care updates, and non-diagnostic care-coordination suggestions.
+- [x] Create and apply the caregiver-network schema migration and seed representative linked-caregiver records and shared updates.
+- [x] Implement typed public tRPC queries for caregiver profiles, shared care updates, and practical care-coordination suggestions.
+- [x] Replace the Caregiver Mode placeholder with a responsive caregiver network that includes invite/link actions and visible care suggestions while preserving the LifeLink design.
+- [x] Add automated and browser verification for caregiver connections, shared updates, suggestions, and empty/error/retry states.
+- [x] Add a persistent caregiver invitation action so patients can create and view new linked-caregiver invitations from Caregiver Mode.
+- [x] Make caregiver-network tests resilient to newly persisted caregiver invitations.
+- [x] Add a tailored Caregiver Mode loading, empty, error, and retry state model with automated coverage.
+- [x] Verify caregiver-network error recovery and caregiver-specific empty messaging in the browser.
+- [x] Force and verify the Caregiver Mode empty state and its tailored caregiver-specific message in the browser.
+- [x] Add a Caregiver Mode link-status filter with automated coverage for matching and empty results.

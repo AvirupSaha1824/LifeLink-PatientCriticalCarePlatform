@@ -4,6 +4,9 @@ import {
   getBloodComponents,
   getBloodMapMarkers,
   getBloodReservations,
+  getCaregiverLinks,
+  getCaregiverSharedUpdates,
+  getCaregiverSuggestions,
   getHospitalTreatmentStatuses,
   getMedicineAvailability,
   getMedicineCategories,
@@ -118,6 +121,38 @@ describe("health public discovery API", () => {
     expect(delayed).toHaveLength(1);
     expect(delayed[0]).toMatchObject({ referenceCode: "LL-TX-2026-004", treatmentType: "chemotherapy", status: "delayed" });
   });
+
+  it("returns linked caregivers, shared updates, and care-coordination suggestions", async () => {
+    const caller = appRouter.createCaller(createPublicContext());
+    const [links, activeLinks, pausedLinks, updates, suggestions] = await Promise.all([
+      caller.health.caregivers.links({ patientName: "Srijan" }),
+      caller.health.caregivers.links({ patientName: "Srijan", linkStatus: "active" }),
+      caller.health.caregivers.links({ patientName: "Srijan", linkStatus: "paused" }),
+      caller.health.caregivers.updates({ patientName: "Srijan" }),
+      caller.health.caregivers.suggestions({ patientName: "Srijan" }),
+    ]);
+
+    expect(links.length).toBeGreaterThanOrEqual(3);
+    expect(activeLinks.length).toBeGreaterThanOrEqual(2);
+    expect(pausedLinks).toEqual([]);
+    expect(updates).toHaveLength(3);
+    expect(suggestions).toHaveLength(3);
+    expect(suggestions.map(suggestion => suggestion.category)).toEqual(expect.arrayContaining(["blood", "appointment", "medicine"]));
+  });
+
+  it("returns the existing caregiver link when a known caregiver invitation is submitted again", async () => {
+    const caller = appRouter.createCaller(createPublicContext());
+    const result = await caller.health.caregivers.invite({
+      patientName: "Srijan",
+      fullName: "Demo — Anita Roy",
+      relationship: "Family caregiver",
+      phone: "+91 90000 30001",
+      email: "anita.demo@lifelink.example",
+    });
+
+    expect(result).toMatchObject({ created: false, linkStatus: "active" });
+    expect(result.linkId).toEqual(expect.any(Number));
+  });
 });
 
 describe("health database query helpers", () => {
@@ -164,5 +199,18 @@ describe("health database query helpers", () => {
     expect(treatments).toHaveLength(2);
     expect(treatments.every(treatment => treatment.hospitalName.startsWith("Demo —"))).toBe(true);
     expect(treatments.every(treatment => treatment.department.length > 0 && treatment.hospitalPhone.length > 0)).toBe(true);
+  });
+
+  it("returns direct caregiver data with patient links, shared updates, and non-diagnostic suggestions", async () => {
+    const [links, updates, suggestions] = await Promise.all([
+      getCaregiverLinks({ patientName: "Srijan" }),
+      getCaregiverSharedUpdates({ patientName: "Srijan" }),
+      getCaregiverSuggestions({ patientName: "Srijan", suggestionStatus: "new" }),
+    ]);
+
+    expect(links.map(link => link.caregiverName)).toEqual(expect.arrayContaining(["Demo — Anita Roy", "Demo — Rahul Sen"]));
+    expect(updates.every(update => update.patientName === "Srijan")).toBe(true);
+    expect(suggestions).toHaveLength(2);
+    expect(suggestions.every(suggestion => suggestion.detail.includes("confirm") || suggestion.detail.includes("Use the medicine tracker"))).toBe(true);
   });
 });

@@ -4,6 +4,9 @@ import {
   bloodBanks,
   bloodGroupInventory,
   bloodReservations,
+  caregiverProfiles,
+  caregiverSharedUpdates,
+  caregiverSuggestions,
   contactDetails,
   hospitals,
   hospitalTreatmentStatuses,
@@ -12,6 +15,7 @@ import {
   medicineAvailability,
   medicines,
   medicineSources,
+  patientCaregiverLinks,
   users,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
@@ -41,6 +45,20 @@ export type ReservationFilters = {
 export type TreatmentStatusFilters = {
   treatmentType?: "transfusion" | "chemotherapy";
   status?: "scheduled" | "confirmed" | "in_progress" | "completed" | "delayed" | "cancelled";
+};
+
+export type CaregiverNetworkFilters = {
+  patientName?: string;
+  linkStatus?: "invited" | "active" | "paused" | "revoked";
+  suggestionStatus?: "new" | "acknowledged" | "completed" | "dismissed";
+};
+
+export type CaregiverInvitationInput = {
+  patientName: string;
+  fullName: string;
+  relationship: string;
+  phone: string;
+  email?: string;
 };
 
 // Lazily create the Drizzle instance so local tooling can run without a database.
@@ -332,4 +350,138 @@ export async function getHospitalTreatmentStatuses(filters: TreatmentStatusFilte
     .innerJoin(locations, eq(hospitals.locationId, locations.id))
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(hospitalTreatmentStatuses.scheduledForAt);
+}
+
+export async function getCaregiverLinks(filters: CaregiverNetworkFilters = {}) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions: SQL<unknown>[] = [];
+  if (filters.patientName?.trim()) conditions.push(eq(patientCaregiverLinks.patientName, filters.patientName.trim()));
+  if (filters.linkStatus) conditions.push(eq(patientCaregiverLinks.linkStatus, filters.linkStatus));
+
+  return db
+    .select({
+      linkId: patientCaregiverLinks.id,
+      patientName: patientCaregiverLinks.patientName,
+      linkStatus: patientCaregiverLinks.linkStatus,
+      sharingLevel: patientCaregiverLinks.sharingLevel,
+      invitedAt: patientCaregiverLinks.invitedAt,
+      acceptedAt: patientCaregiverLinks.acceptedAt,
+      lastSharedAt: patientCaregiverLinks.lastSharedAt,
+      caregiverId: caregiverProfiles.id,
+      caregiverName: caregiverProfiles.fullName,
+      relationship: caregiverProfiles.relationship,
+      caregiverPhone: caregiverProfiles.phone,
+      caregiverEmail: caregiverProfiles.email,
+      availability: caregiverProfiles.availability,
+      notificationPreference: caregiverProfiles.notificationPreference,
+      isVerified: caregiverProfiles.isVerified,
+      lastActiveAt: caregiverProfiles.lastActiveAt,
+    })
+    .from(patientCaregiverLinks)
+    .innerJoin(caregiverProfiles, eq(patientCaregiverLinks.caregiverId, caregiverProfiles.id))
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(desc(patientCaregiverLinks.lastSharedAt), caregiverProfiles.fullName);
+}
+
+export async function getCaregiverSharedUpdates(filters: CaregiverNetworkFilters = {}) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const patientName = filters.patientName?.trim();
+  return db
+    .select({
+      updateId: caregiverSharedUpdates.id,
+      updateType: caregiverSharedUpdates.updateType,
+      priority: caregiverSharedUpdates.priority,
+      title: caregiverSharedUpdates.title,
+      detail: caregiverSharedUpdates.detail,
+      sharedAt: caregiverSharedUpdates.sharedAt,
+      readAt: caregiverSharedUpdates.readAt,
+      caregiverName: caregiverProfiles.fullName,
+      caregiverLinkId: patientCaregiverLinks.id,
+      patientName: patientCaregiverLinks.patientName,
+    })
+    .from(caregiverSharedUpdates)
+    .innerJoin(patientCaregiverLinks, eq(caregiverSharedUpdates.caregiverLinkId, patientCaregiverLinks.id))
+    .innerJoin(caregiverProfiles, eq(patientCaregiverLinks.caregiverId, caregiverProfiles.id))
+    .where(patientName ? eq(patientCaregiverLinks.patientName, patientName) : undefined)
+    .orderBy(desc(caregiverSharedUpdates.sharedAt));
+}
+
+export async function getCaregiverSuggestions(filters: CaregiverNetworkFilters = {}) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions: SQL<unknown>[] = [];
+  if (filters.patientName?.trim()) conditions.push(eq(patientCaregiverLinks.patientName, filters.patientName.trim()));
+  if (filters.suggestionStatus) conditions.push(eq(caregiverSuggestions.suggestionStatus, filters.suggestionStatus));
+
+  return db
+    .select({
+      suggestionId: caregiverSuggestions.id,
+      category: caregiverSuggestions.category,
+      title: caregiverSuggestions.title,
+      detail: caregiverSuggestions.detail,
+      suggestionStatus: caregiverSuggestions.suggestionStatus,
+      suggestedAt: caregiverSuggestions.suggestedAt,
+      statusUpdatedAt: caregiverSuggestions.statusUpdatedAt,
+      caregiverName: caregiverProfiles.fullName,
+      caregiverLinkId: patientCaregiverLinks.id,
+      patientName: patientCaregiverLinks.patientName,
+    })
+    .from(caregiverSuggestions)
+    .innerJoin(patientCaregiverLinks, eq(caregiverSuggestions.caregiverLinkId, patientCaregiverLinks.id))
+    .innerJoin(caregiverProfiles, eq(patientCaregiverLinks.caregiverId, caregiverProfiles.id))
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(desc(caregiverSuggestions.suggestedAt));
+}
+
+export async function inviteCaregiver(input: CaregiverInvitationInput) {
+  const db = await getDb();
+  if (!db) throw new Error("Database connection is unavailable");
+
+  let caregiver = await db.select().from(caregiverProfiles).where(eq(caregiverProfiles.phone, input.phone)).limit(1);
+  if (!caregiver[0]) {
+    await db.insert(caregiverProfiles).values({
+      fullName: input.fullName,
+      relationship: input.relationship,
+      phone: input.phone,
+      email: input.email ?? null,
+      availability: "offline",
+      notificationPreference: "all_updates",
+      isVerified: false,
+      lastActiveAt: new Date(),
+    });
+    caregiver = await db.select().from(caregiverProfiles).where(eq(caregiverProfiles.phone, input.phone)).limit(1);
+  }
+
+  const caregiverRecord = caregiver[0];
+  if (!caregiverRecord) throw new Error("Unable to create caregiver profile");
+
+  const links = await db
+    .select()
+    .from(patientCaregiverLinks)
+    .where(and(eq(patientCaregiverLinks.patientName, input.patientName), eq(patientCaregiverLinks.caregiverId, caregiverRecord.id)))
+    .limit(1);
+  if (links[0]) {
+    return { linkId: links[0].id, caregiverId: caregiverRecord.id, created: false, linkStatus: links[0].linkStatus };
+  }
+
+  await db.insert(patientCaregiverLinks).values({
+    patientName: input.patientName,
+    caregiverId: caregiverRecord.id,
+    linkStatus: "invited",
+    sharingLevel: "care_updates",
+    invitedAt: new Date(),
+  });
+  const invitation = await db
+    .select()
+    .from(patientCaregiverLinks)
+    .where(and(eq(patientCaregiverLinks.patientName, input.patientName), eq(patientCaregiverLinks.caregiverId, caregiverRecord.id)))
+    .limit(1);
+  if (!invitation[0]) throw new Error("Unable to create caregiver invitation");
+
+  return { linkId: invitation[0].id, caregiverId: caregiverRecord.id, created: true, linkStatus: invitation[0].linkStatus };
 }

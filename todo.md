@@ -63,3 +63,9 @@
 - [x] Verify the refreshed dashboard date, time, and status panels in the browser.
 - [x] Update the representative reservation, treatment, and caregiver database records so their statuses and timestamps match the current timeline, then verify the affected views.
 - [x] Add automated API assertions for the updated representative reservation, treatment, and caregiver statuses and timestamps.
+- [x] Diagnose the failed deployment and inspect LifeLink Blue's production build configuration and output.
+- [x] Correct any project-level deployment blocker found during build validation.
+- [x] Verify the production build and document whether the existing managed hosting capacity fits the current application workload.
+- [x] Diagnose why Vercel serves the backend bundle as page text instead of the LifeLink application.
+- [x] Add a Vercel-compatible build and route configuration for the LifeLink frontend and server endpoints.
+- [x] Document the required Vercel environment variables and redeployment steps for the full-stack application.

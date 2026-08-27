@@ -153,6 +153,63 @@ The current public procedures support the representative unauthenticated demonst
 
 Caregiver suggestions are intentionally practical prompts, such as confirming a collection requirement with a provider. They are not clinical diagnoses or treatment instructions.
 
+## Production data-retention and patient privacy policy
+
+> **Working policy — legal and clinical review required.** I am an AI, not a lawyer. This is an engineering baseline rather than formal legal advice. The operating organization must obtain qualified privacy, security, and healthcare-regulatory review before collecting real patient data, and must replace any period below that conflicts with applicable law, provider contracts, or a valid legal hold.
+
+LifeLink Blue must operate as a **care-coordination application**, not an independent clinical system of record. It should collect only information required for the selected coordination purpose, keep it only for the approved period, and use a separate provider system for the authoritative medical record. This baseline follows the security-safeguard model described by the U.S. HIPAA Security Rule and the privacy principles reflected in GDPR Article 5; legal applicability depends on the organization, data, and deployment jurisdiction.[1] [2]
+
+### Retention schedule and deletion rules
+
+| Data category | Production retention rule | Required disposition |
+| --- | --- | --- |
+| Demonstration records | Use synthetic, clearly labeled records only. Reset with each demonstration release and delete within 30 days after the release is retired. | Hard-delete synthetic records and associated media; never mix them with production patient data. |
+| Authentication sessions and reset tokens | Keep only while active; expire within 24 hours of inactivity and no later than 30 days after issue. | Revoke immediately on logout, credential reset, suspected compromise, or account disablement. |
+| Patient profile and contact data | Retain while the account is active and the coordination relationship is active. On approved closure, begin deletion or de-identification within 30 days unless a documented legal, contractual, or patient-safety retention obligation applies. | Remove direct identifiers from operational tables and invalidate caregiver access. Preserve only the minimum non-identifying audit evidence required by the approved retention schedule. |
+| Blood reservations, treatment-status events, and caregiver coordination updates | Retain as short-lived coordination data for 90 days after the related event is completed, cancelled, or expired. Do not use this period for statutory medical-record retention; provider records remain the source of truth. | Delete or irreversibly de-identify after 90 days unless an approved retention schedule, legal hold, incident investigation, or patient request requires otherwise. |
+| Caregiver consent, sharing level, and revocation history | Retain while a caregiver link is active, plus 12 months after revocation or expiry to evidence consent administration. | Revoke access immediately. Retain the minimum consent-history fields, not copies of shared clinical content. |
+| Security and access audit events | Retain 12 months, with role, action, record identifier, outcome, source IP/pseudonym, and timestamp. Audit events must avoid clinical narrative and direct identifiers wherever possible. | Restrict access to authorized security staff; purge after 12 months unless an active investigation or legal hold applies. |
+| Encrypted backups | Retain a rolling maximum of 30 days. Backups must inherit the same access controls and deletion obligations as the source data. | Expire automatically; test restoration under controlled access and record the test outcome. |
+| Application, analytics, and error logs | Retain operational logs for 30 days. Never log credentials, session tokens, full names, contact details, treatment notes, or reservation payloads. | Redact at ingestion and purge automatically; investigate and remediate any accidental sensitive-data capture. |
+
+Every deletion, de-identification, export, retention exception, and legal hold must be recorded in an administrative audit trail. A legal hold pauses routine deletion only for the scoped records, includes a documented owner and review date, and is released promptly when the obligation ends.
+
+### Required privacy and security safeguards
+
+| Safeguard | Production requirement |
+| --- | --- |
+| Access control | Replace public demonstration procedures with authenticated, patient-scoped procedures. Every request must verify that the user owns the patient profile or has an active, authorized clinical or caregiver relationship. |
+| Caregiver consent | Permit sharing only through an active `patientCaregiverLinks` record. Enforce `sharingLevel`, display the scope of sharing to the patient, support immediate revocation, and deny access after revocation. |
+| Minimum necessary data | Collect only fields required for blood, medicine, appointment, or caregiver coordination. Do not add diagnosis narratives, attachments, government identifiers, or payment data unless separately assessed and justified. |
+| Encryption and secrets | Require HTTPS in transit, encrypt production databases and backups at rest, keep all secrets in managed secret storage, and rotate credentials on a documented schedule and after suspected exposure. |
+| Auditability | Log access to patient-scoped records, consent changes, exports, deletions, and administrator actions. Protect audit logs from ordinary application users and review them for anomalous access. |
+| Data isolation | Use row-level patient scoping in every database helper and tRPC procedure. Do not trust a client-supplied patient ID without confirming the authenticated actor's relationship. |
+| Secure engineering | Apply dependency updates, code review, least-privilege service accounts, rate limits, input validation, security tests, and periodic vulnerability assessment before and during production operation. |
+| Vendor management | Maintain a register of processors, hosting providers, analytics tools, map services, and support tools. Do not transmit patient-identifying data to a vendor until contractual, regional, and security requirements are approved. |
+| Incident response | Maintain an incident runbook for containment, investigation, evidence preservation, notification assessment, remediation, and post-incident review. Test the runbook at least annually. |
+| Patient rights and requests | Provide a documented process to verify and respond to access, correction, deletion, consent-revocation, and data-export requests within the applicable legal timeline. |
+
+### Production release gate
+
+The following conditions are mandatory before any real patient information is entered into LifeLink Blue.
+
+| Release gate | Evidence required |
+| --- | --- |
+| Authorization hardening | Tests proving patient, caregiver, clinician, and administrator access is denied unless explicitly permitted. |
+| Consent controls | A patient-visible sharing screen, granular sharing controls, revocation action, and audit event for every change. |
+| Retention automation | Scheduled deletion/de-identification jobs, backup-expiry controls, legal-hold workflow, and monitored job-failure alerts. |
+| Security review | Threat model, dependency scan, penetration-test or equivalent assessment, secrets review, and remediation record. |
+| Governance approval | Named privacy owner, approved retention schedule, processor register, incident plan, and documented legal/clinical review. |
+| Operational readiness | Restore test, access-log review procedure, on-call ownership, and staff training for handling patient-data requests and incidents. |
+
+Until these controls are implemented and approved, keep the application limited to the existing representative demonstration data.
+
+## References
+
+[1] [U.S. Department of Health & Human Services, *The HIPAA Security Rule*](https://www.hhs.gov/hipaa/for-professionals/security/index.html)
+
+[2] [EUR-Lex, *Regulation (EU) 2016/679 (General Data Protection Regulation)*](https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng)
+
 ## License
 
 This project is currently distributed under the **MIT** license as declared in [`package.json`](package.json).

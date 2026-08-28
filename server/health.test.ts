@@ -8,6 +8,7 @@ import {
   getCaregiverSharedUpdates,
   getCaregiverSuggestions,
   getCareJourney,
+  getDatabaseHealth,
   getHospitalTreatmentStatuses,
   getMedicineAvailability,
   getMedicineCategories,
@@ -24,6 +25,13 @@ function createPublicContext(): TrpcContext {
 }
 
 describe("health public discovery API", () => {
+  it("confirms the configured database is reachable for serverless requests", async () => {
+    await expect(getDatabaseHealth()).resolves.toMatchObject({
+      configured: true,
+      connected: true,
+    });
+  });
+
   it("returns seeded B+ PRBC availability for Kolkata", async () => {
     const caller = appRouter.createCaller(createPublicContext());
     const results = await caller.health.bloodBanks.list({

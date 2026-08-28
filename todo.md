@@ -74,3 +74,15 @@
 - [x] Validate the completed README policy section and synchronize it to the connected GitHub repository.
 - [x] Verify the README privacy-policy update is present in the connected GitHub repository.
 - [x] Confirm whether any additional external service or API key is necessary for the current LifeLink Blue feature set.
+
+- [ ] Diagnose why the Vercel production API cannot reach the LifeLink database.
+- [ ] Verify production database environment-variable names, serverless initialization, TLS, and connection-pooling requirements without exposing credentials.
+- [ ] Implement and validate any project-level Vercel database connection fix that is required.
+- [ ] Document the exact Vercel database deployment requirements and verification steps.
+- [ ] Run automated and deployed API checks for database-backed endpoints after the fix.
+
+## Current deployment investigation
+
+- [ ] Confirm whether the Vercel project has the required production database environment variables configured.
+- [ ] Confirm whether the production database permits Vercel network connections and TLS.
+- [ ] Confirm whether the deployed serverless function returns database-backed tRPC responses.

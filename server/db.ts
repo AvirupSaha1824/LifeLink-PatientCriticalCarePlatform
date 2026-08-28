@@ -78,6 +78,22 @@ export async function getDb() {
   return _db;
 }
 
+export async function getDatabaseHealth() {
+  const configured = Boolean(process.env.DATABASE_URL);
+  if (!configured) return { configured: false, connected: false } as const;
+
+  const db = await getDb();
+  if (!db) return { configured: true, connected: false } as const;
+
+  try {
+    await db.execute(sql`SELECT 1`);
+    return { configured: true, connected: true } as const;
+  } catch (error) {
+    console.warn("[Database] Health check failed:", error);
+    return { configured: true, connected: false } as const;
+  }
+}
+
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) throw new Error("User openId is required for upsert");
 
